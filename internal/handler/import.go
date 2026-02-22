@@ -33,7 +33,7 @@ func (h *ImportHandler) Import(w http.ResponseWriter, r *http.Request) {
 
 	entry, needsConfirm, err := h.importService.Import(r.Context(), header.Filename, file, overwrite)
 	if err != nil {
-		if errors.Is(err, service.ErrInvalidFile) {
+		if errors.Is(err, service.ErrInvalidFilename) {
 			respondError(w, http.StatusBadRequest, "INVALID_FILE", err.Error())
 			return
 		}
@@ -74,8 +74,8 @@ func (h *ImportHandler) ImportZip(w http.ResponseWriter, r *http.Request) {
 
 	result, err := h.importService.ImportZip(r.Context(), file, header.Size)
 	if err != nil {
-		if errors.Is(err, service.ErrInvalidFile) {
-			respondError(w, http.StatusBadRequest, "INVALID_FILE", "zip ファイルが読み込めません")
+		if errors.Is(err, service.ErrInvalidZip) {
+			respondError(w, http.StatusBadRequest, "INVALID_ZIP", err.Error())
 			return
 		}
 		respondError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())

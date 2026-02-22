@@ -73,7 +73,7 @@ func TestImportHandler_Import_Success(t *testing.T) {
 func TestImportHandler_Import_InvalidFile(t *testing.T) {
 	importSvc := &mockImportService{
 		importFn: func(_ context.Context, filename string, r io.Reader, overwrite bool) (*model.Entry, bool, error) {
-			return nil, false, service.ErrInvalidFile
+			return nil, false, service.ErrInvalidFilename
 		},
 	}
 	h := handler.NewImportHandler(importSvc)

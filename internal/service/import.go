@@ -43,7 +43,7 @@ func NewImportService(repo repository.EntryRepository) ImportService {
 func (s *importService) Import(ctx context.Context, filename string, r io.Reader, overwrite bool) (*model.Entry, bool, error) {
 	date, err := domain.ParseImportFilename(filename)
 	if err != nil {
-		return nil, false, ErrInvalidFile
+		return nil, false, ErrInvalidFilename
 	}
 
 	bodyBytes, err := io.ReadAll(r)
@@ -99,12 +99,14 @@ func readZipEntry(f *zip.File) ([]byte, error) {
 func (s *importService) ImportZip(ctx context.Context, r io.ReaderAt, size int64) (*ZipImportResult, error) {
 	zr, err := zip.NewReader(r, size)
 	if err != nil {
-		return nil, ErrInvalidFile
+		return nil, ErrInvalidZip
 	}
 
 	result := &ZipImportResult{
 		Skipped: make([]ZipSkippedEntry, 0),
 	}
+
+	now := time.Now()
 
 	for _, f := range zr.File {
 		if f.FileInfo().IsDir() {
@@ -135,7 +137,6 @@ func (s *importService) ImportZip(ctx context.Context, r io.ReaderAt, size int64
 			return nil, err
 		}
 
-		now := time.Now()
 		entry := &model.Entry{
 			Date:      date,
 			Body:      string(bodyBytes),

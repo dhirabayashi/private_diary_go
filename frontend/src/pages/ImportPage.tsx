@@ -73,7 +73,7 @@ export function ImportPage() {
   }
 
   return (
-    <PageLayout title="テキストインポート">
+    <PageLayout title="インポート">
       <div className="max-w-lg space-y-10">
 
         {/* ZIP bulk import */}

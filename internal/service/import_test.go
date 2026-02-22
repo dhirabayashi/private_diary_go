@@ -54,11 +54,11 @@ func TestImportService_Import(t *testing.T) {
 		assert.Equal(t, "本文内容", savedEntry.Body)
 	})
 
-	t.Run("異常: 不正なファイル名はErrInvalidFile", func(t *testing.T) {
+	t.Run("異常: 不正なファイル名はErrInvalidFilename", func(t *testing.T) {
 		repo := &mockEntryRepo{}
 		svc := service.NewImportService(repo)
 		_, _, err := svc.Import(ctx, "invalid.txt", strings.NewReader("本文"), false)
-		assert.ErrorIs(t, err, service.ErrInvalidFile)
+		assert.ErrorIs(t, err, service.ErrInvalidFilename)
 	})
 
 	t.Run("既存エントリあり・overwrite=false → needsConfirm=true", func(t *testing.T) {
@@ -172,11 +172,11 @@ func TestImportService_ImportZip(t *testing.T) {
 		assert.Equal(t, "2024-05-01", savedDate)
 	})
 
-	t.Run("異常: 不正なZIPデータはErrInvalidFile", func(t *testing.T) {
+	t.Run("異常: 不正なZIPデータはErrInvalidZip", func(t *testing.T) {
 		repo := &mockEntryRepo{}
 		svc := service.NewImportService(repo)
 		invalid := bytes.NewReader([]byte("これはZIPではない"))
 		_, err := svc.ImportZip(ctx, invalid, int64(len("これはZIPではない")))
-		assert.ErrorIs(t, err, service.ErrInvalidFile)
+		assert.ErrorIs(t, err, service.ErrInvalidZip)
 	})
 }
