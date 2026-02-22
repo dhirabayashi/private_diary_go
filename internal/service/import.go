@@ -87,6 +87,15 @@ func (s *importService) Import(ctx context.Context, filename string, r io.Reader
 	return entry, false, nil
 }
 
+func readZipEntry(f *zip.File) ([]byte, error) {
+	rc, err := f.Open()
+	if err != nil {
+		return nil, err
+	}
+	defer rc.Close()
+	return io.ReadAll(rc)
+}
+
 func (s *importService) ImportZip(ctx context.Context, r io.ReaderAt, size int64) (*ZipImportResult, error) {
 	zr, err := zip.NewReader(r, size)
 	if err != nil {
@@ -121,12 +130,7 @@ func (s *importService) ImportZip(ctx context.Context, r io.ReaderAt, size int64
 			continue
 		}
 
-		rc, err := f.Open()
-		if err != nil {
-			return nil, err
-		}
-		bodyBytes, err := io.ReadAll(rc)
-		rc.Close()
+		bodyBytes, err := readZipEntry(f)
 		if err != nil {
 			return nil, err
 		}
