@@ -3,6 +3,7 @@ package handler
 import (
 	"errors"
 	"net/http"
+	"strings"
 
 	"private_diary/internal/service"
 )
@@ -51,4 +52,35 @@ func (h *ImportHandler) Import(w http.ResponseWriter, r *http.Request) {
 	}
 
 	respondJSON(w, http.StatusOK, map[string]interface{}{"data": entry})
+}
+
+func (h *ImportHandler) ImportZip(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseMultipartForm(100 << 20); err != nil {
+		respondError(w, http.StatusBadRequest, "INVALID_REQUEST", "failed to parse form")
+		return
+	}
+
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "INVALID_REQUEST", "file field required")
+		return
+	}
+	defer file.Close()
+
+	if !strings.HasSuffix(strings.ToLower(header.Filename), ".zip") {
+		respondError(w, http.StatusBadRequest, "INVALID_FILE", "zip ファイルのみ対応しています")
+		return
+	}
+
+	result, err := h.importService.ImportZip(r.Context(), file, header.Size)
+	if err != nil {
+		if errors.Is(err, service.ErrInvalidFile) {
+			respondError(w, http.StatusBadRequest, "INVALID_FILE", "zip ファイルが読み込めません")
+			return
+		}
+		respondError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+		return
+	}
+
+	respondJSON(w, http.StatusOK, map[string]interface{}{"data": result})
 }

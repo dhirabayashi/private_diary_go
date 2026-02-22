@@ -1,8 +1,10 @@
 package service
 
 import (
+	"archive/zip"
 	"context"
 	"io"
+	"path/filepath"
 	"time"
 
 	"private_diary/internal/domain"
@@ -10,10 +12,23 @@ import (
 	"private_diary/internal/repository"
 )
 
+type ZipSkippedEntry struct {
+	Date   string `json:"date"`
+	Reason string `json:"reason"`
+}
+
+type ZipImportResult struct {
+	Imported int               `json:"imported"`
+	Skipped  []ZipSkippedEntry `json:"skipped"`
+}
+
 type ImportService interface {
 	// Import imports a text file. Returns (entry, needsConfirm, error).
 	// needsConfirm=true means entry already exists and overwrite=false was passed.
 	Import(ctx context.Context, filename string, r io.Reader, overwrite bool) (*model.Entry, bool, error)
+	// ImportZip imports multiple text files from a ZIP archive.
+	// Files with invalid names are silently ignored. Files for existing dates are skipped and reported.
+	ImportZip(ctx context.Context, r io.ReaderAt, size int64) (*ZipImportResult, error)
 }
 
 type importService struct {
@@ -69,4 +84,61 @@ func (s *importService) Import(ctx context.Context, filename string, r io.Reader
 		return nil, false, err
 	}
 	return entry, false, nil
+}
+
+func (s *importService) ImportZip(ctx context.Context, r io.ReaderAt, size int64) (*ZipImportResult, error) {
+	zr, err := zip.NewReader(r, size)
+	if err != nil {
+		return nil, ErrInvalidFile
+	}
+
+	result := &ZipImportResult{
+		Skipped: make([]ZipSkippedEntry, 0),
+	}
+
+	for _, f := range zr.File {
+		if f.FileInfo().IsDir() {
+			continue
+		}
+
+		name := filepath.Base(f.Name)
+		date, err := domain.ParseImportFilename(name)
+		if err != nil {
+			// invalid filename (e.g. .DS_Store) - silently ignore
+			continue
+		}
+
+		exists, err := s.repo.ExistsDate(ctx, date)
+		if err != nil {
+			return nil, err
+		}
+		if exists {
+			result.Skipped = append(result.Skipped, ZipSkippedEntry{Date: date, Reason: "already_exists"})
+			continue
+		}
+
+		rc, err := f.Open()
+		if err != nil {
+			return nil, err
+		}
+		bodyBytes, err := io.ReadAll(rc)
+		rc.Close()
+		if err != nil {
+			return nil, err
+		}
+
+		now := time.Now()
+		entry := &model.Entry{
+			Date:      date,
+			Body:      string(bodyBytes),
+			CreatedAt: now,
+			UpdatedAt: now,
+		}
+		if err := s.repo.Save(ctx, entry); err != nil {
+			return nil, err
+		}
+		result.Imported++
+	}
+
+	return result, nil
 }

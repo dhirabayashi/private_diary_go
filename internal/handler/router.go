@@ -40,6 +40,7 @@ func NewRouter(
 		})
 		r.Delete("/images/{id}", imageHandler.Delete)
 		r.Post("/import", importHandler.Import)
+		r.Post("/import/zip", importHandler.ImportZip)
 		r.Get("/export", exportHandler.Export)
 	})
 
