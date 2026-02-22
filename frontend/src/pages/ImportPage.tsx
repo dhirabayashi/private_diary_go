@@ -6,6 +6,9 @@ import { useToast } from '../components/ui/Toast'
 import { importFile, importZip } from '../api/importApi'
 import type { ZipImportResult } from '../api/importApi'
 
+const MAX_TXT_SIZE = 10 * 1024 * 1024  // 10MB
+const MAX_ZIP_SIZE = 100 * 1024 * 1024 // 100MB
+
 export function ImportPage() {
   const navigate = useNavigate()
   const { showToast } = useToast()
@@ -24,6 +27,10 @@ export function ImportPage() {
       showToast('.txt ファイルのみ対応しています', 'error')
       return
     }
+    if (f.size > MAX_TXT_SIZE) {
+      showToast('ファイルサイズが大きすぎます（上限10MB）', 'error')
+      return
+    }
     setFile(f)
     setPendingFile(null)
   }
@@ -31,6 +38,10 @@ export function ImportPage() {
   const handleZipFile = (f: File) => {
     if (!f.name.toLowerCase().endsWith('.zip')) {
       showToast('.zip ファイルのみ対応しています', 'error')
+      return
+    }
+    if (f.size > MAX_ZIP_SIZE) {
+      showToast('ファイルサイズが大きすぎます（上限100MB）', 'error')
       return
     }
     setZipFile(f)

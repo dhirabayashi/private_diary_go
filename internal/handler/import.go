@@ -8,6 +8,11 @@ import (
 	"private_diary/internal/service"
 )
 
+const (
+	maxTxtUploadSize = 10 << 20  // 10MB
+	maxZipUploadSize = 100 << 20 // 100MB
+)
+
 type zipSkippedResponse struct {
 	Date   string `json:"date"`
 	Reason string `json:"reason"`
@@ -27,7 +32,13 @@ func NewImportHandler(is service.ImportService) *ImportHandler {
 }
 
 func (h *ImportHandler) Import(w http.ResponseWriter, r *http.Request) {
-	if err := r.ParseMultipartForm(10 << 20); err != nil {
+	r.Body = http.MaxBytesReader(w, r.Body, maxTxtUploadSize)
+	if err := r.ParseMultipartForm(maxTxtUploadSize); err != nil {
+		var maxErr *http.MaxBytesError
+		if errors.As(err, &maxErr) {
+			respondError(w, http.StatusRequestEntityTooLarge, "FILE_TOO_LARGE", "ファイルサイズが大きすぎます（上限10MB）")
+			return
+		}
 		respondError(w, http.StatusBadRequest, "INVALID_REQUEST", "failed to parse form")
 		return
 	}
@@ -65,7 +76,13 @@ func (h *ImportHandler) Import(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ImportHandler) ImportZip(w http.ResponseWriter, r *http.Request) {
-	if err := r.ParseMultipartForm(100 << 20); err != nil {
+	r.Body = http.MaxBytesReader(w, r.Body, maxZipUploadSize)
+	if err := r.ParseMultipartForm(maxZipUploadSize); err != nil {
+		var maxErr *http.MaxBytesError
+		if errors.As(err, &maxErr) {
+			respondError(w, http.StatusRequestEntityTooLarge, "FILE_TOO_LARGE", "ファイルサイズが大きすぎます（上限100MB）")
+			return
+		}
 		respondError(w, http.StatusBadRequest, "INVALID_REQUEST", "failed to parse form")
 		return
 	}
