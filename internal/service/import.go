@@ -3,8 +3,9 @@ package service
 import (
 	"archive/zip"
 	"context"
+	"errors"
 	"io"
-	"path/filepath"
+	"path"
 	"time"
 
 	"private_diary/internal/domain"
@@ -101,11 +102,14 @@ func (s *importService) ImportZip(ctx context.Context, r io.ReaderAt, size int64
 			continue
 		}
 
-		name := filepath.Base(f.Name)
+		name := path.Base(f.Name)
 		date, err := domain.ParseImportFilename(name)
 		if err != nil {
-			// invalid filename (e.g. .DS_Store) - silently ignore
-			continue
+			if errors.Is(err, domain.ErrInvalidFilename) {
+				// invalid filename (e.g. .DS_Store) - silently ignore
+				continue
+			}
+			return nil, err
 		}
 
 		exists, err := s.repo.ExistsDate(ctx, date)

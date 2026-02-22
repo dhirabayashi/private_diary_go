@@ -19,7 +19,7 @@
 - 日記の投稿・編集・削除（一日一記事）
 - 複数画像のアップロード（JPEG / PNG / GIF / WebP）
 - キーワード・日付範囲での全文検索
-- テキストファイル（`yyyyMMdd.txt`）のインポート
+- テキストファイル（`yyyyMMdd.txt`）のインポート（単一・ZIP 一括）
 - ZIP ファイルへのエクスポート（全件・期間指定）
 - 本文中の URL を自動リンク化
 
@@ -192,7 +192,8 @@ private_diary/
 | `POST` | `/api/entries/:date/images` | 画像アップロード |
 | `GET` | `/api/entries/:date/export` | 単一記事を `.txt` でダウンロード |
 | `DELETE` | `/api/images/:id` | 画像削除 |
-| `POST` | `/api/import` | `.txt` ファイルインポート |
+| `POST` | `/api/import` | `.txt` ファイルインポート（単一ファイル） |
+| `POST` | `/api/import/zip` | ZIP 一括インポート |
 | `GET` | `/api/export` | ZIP エクスポート（`from`, `to`） |
 
 ---

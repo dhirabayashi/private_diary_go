@@ -198,6 +198,7 @@ export function ImportPage() {
             onChange={(e) => {
               const f = e.target.files?.[0]
               if (f) handleFile(f)
+              e.target.value = ''
             }}
           />
 
