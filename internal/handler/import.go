@@ -8,6 +8,16 @@ import (
 	"private_diary/internal/service"
 )
 
+type zipSkippedResponse struct {
+	Date   string `json:"date"`
+	Reason string `json:"reason"`
+}
+
+type zipImportResponse struct {
+	Imported int                  `json:"imported"`
+	Skipped  []zipSkippedResponse `json:"skipped"`
+}
+
 type ImportHandler struct {
 	importService service.ImportService
 }
@@ -82,5 +92,12 @@ func (h *ImportHandler) ImportZip(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondJSON(w, http.StatusOK, map[string]interface{}{"data": result})
+	resp := zipImportResponse{
+		Imported: result.Imported,
+		Skipped:  make([]zipSkippedResponse, len(result.Skipped)),
+	}
+	for i, s := range result.Skipped {
+		resp.Skipped[i] = zipSkippedResponse{Date: s.Date, Reason: s.Reason}
+	}
+	respondJSON(w, http.StatusOK, map[string]interface{}{"data": resp})
 }

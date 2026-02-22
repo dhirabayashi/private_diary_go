@@ -14,13 +14,13 @@ import (
 )
 
 type ZipSkippedEntry struct {
-	Date   string `json:"date"`
-	Reason string `json:"reason"`
+	Date   string
+	Reason string
 }
 
 type ZipImportResult struct {
-	Imported int               `json:"imported"`
-	Skipped  []ZipSkippedEntry `json:"skipped"`
+	Imported int
+	Skipped  []ZipSkippedEntry
 }
 
 type ImportService interface {
