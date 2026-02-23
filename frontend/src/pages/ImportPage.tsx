@@ -7,7 +7,7 @@ import { importFile, importZip } from '../api/importApi'
 import type { ZipImportResult } from '../api/importApi'
 
 const MAX_TXT_SIZE = 10 * 1024 * 1024  // 10MB
-const MAX_ZIP_SIZE = 100 * 1024 * 1024 // 100MB
+const MAX_ZIP_SIZE = 32 * 1024 * 1024 // 32MB
 
 export function ImportPage() {
   const navigate = useNavigate()
@@ -41,7 +41,7 @@ export function ImportPage() {
       return
     }
     if (f.size > MAX_ZIP_SIZE) {
-      showToast('ファイルサイズが大きすぎます（上限100MB）', 'error')
+      showToast('ファイルサイズが大きすぎます（上限32MB）', 'error')
       return
     }
     setZipFile(f)

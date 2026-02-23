@@ -9,8 +9,8 @@ import (
 )
 
 const (
-	maxTxtUploadSize = 10 << 20  // 10MB
-	maxZipUploadSize = 100 << 20 // 100MB
+	maxTxtUploadSize = 10 << 20 // 10MB
+	maxZipUploadSize = 32 << 20 // 32MB
 )
 
 type zipSkippedResponse struct {
@@ -80,7 +80,7 @@ func (h *ImportHandler) ImportZip(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseMultipartForm(maxZipUploadSize); err != nil {
 		var maxErr *http.MaxBytesError
 		if errors.As(err, &maxErr) {
-			respondError(w, http.StatusRequestEntityTooLarge, "FILE_TOO_LARGE", "ファイルサイズが大きすぎます（上限100MB）")
+			respondError(w, http.StatusRequestEntityTooLarge, "FILE_TOO_LARGE", "ファイルサイズが大きすぎます（上限32MB）")
 			return
 		}
 		respondError(w, http.StatusBadRequest, "INVALID_REQUEST", "failed to parse form")
