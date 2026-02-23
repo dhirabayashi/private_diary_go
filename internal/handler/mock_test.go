@@ -5,6 +5,7 @@ import (
 	"io"
 
 	"private_diary/internal/model"
+	"private_diary/internal/service"
 )
 
 // --- mockEntryService ---
@@ -54,11 +55,19 @@ func (m *mockImageService) GetImagesForEntry(ctx context.Context, entryID int64)
 // --- mockImportService ---
 
 type mockImportService struct {
-	importFn func(ctx context.Context, filename string, r io.Reader, overwrite bool) (*model.Entry, bool, error)
+	importFn    func(ctx context.Context, filename string, r io.Reader, overwrite bool) (*model.Entry, bool, error)
+	importZipFn func(ctx context.Context, r io.ReaderAt, size int64) (*service.ZipImportResult, error)
 }
 
 func (m *mockImportService) Import(ctx context.Context, filename string, r io.Reader, overwrite bool) (*model.Entry, bool, error) {
 	return m.importFn(ctx, filename, r, overwrite)
+}
+
+func (m *mockImportService) ImportZip(ctx context.Context, r io.ReaderAt, size int64) (*service.ZipImportResult, error) {
+	if m.importZipFn != nil {
+		return m.importZipFn(ctx, r, size)
+	}
+	return &service.ZipImportResult{Skipped: []service.ZipSkippedEntry{}}, nil
 }
 
 // --- mockExportService ---

@@ -3,9 +3,25 @@ package handler
 import (
 	"errors"
 	"net/http"
+	"strings"
 
 	"private_diary/internal/service"
 )
+
+const (
+	maxTxtUploadSize = 10 << 20 // 10MB
+	maxZipUploadSize = 32 << 20 // 32MB
+)
+
+type zipSkippedResponse struct {
+	Date   string `json:"date"`
+	Reason string `json:"reason"`
+}
+
+type zipImportResponse struct {
+	Imported int                  `json:"imported"`
+	Skipped  []zipSkippedResponse `json:"skipped"`
+}
 
 type ImportHandler struct {
 	importService service.ImportService
@@ -16,7 +32,13 @@ func NewImportHandler(is service.ImportService) *ImportHandler {
 }
 
 func (h *ImportHandler) Import(w http.ResponseWriter, r *http.Request) {
-	if err := r.ParseMultipartForm(10 << 20); err != nil {
+	r.Body = http.MaxBytesReader(w, r.Body, maxTxtUploadSize)
+	if err := r.ParseMultipartForm(maxTxtUploadSize); err != nil {
+		var maxErr *http.MaxBytesError
+		if errors.As(err, &maxErr) {
+			respondError(w, http.StatusRequestEntityTooLarge, "FILE_TOO_LARGE", "ファイルサイズが大きすぎます（上限10MB）")
+			return
+		}
 		respondError(w, http.StatusBadRequest, "INVALID_REQUEST", "failed to parse form")
 		return
 	}
@@ -32,7 +54,7 @@ func (h *ImportHandler) Import(w http.ResponseWriter, r *http.Request) {
 
 	entry, needsConfirm, err := h.importService.Import(r.Context(), header.Filename, file, overwrite)
 	if err != nil {
-		if errors.Is(err, service.ErrInvalidFile) {
+		if errors.Is(err, service.ErrInvalidFilename) {
 			respondError(w, http.StatusBadRequest, "INVALID_FILE", err.Error())
 			return
 		}
@@ -51,4 +73,48 @@ func (h *ImportHandler) Import(w http.ResponseWriter, r *http.Request) {
 	}
 
 	respondJSON(w, http.StatusOK, map[string]interface{}{"data": entry})
+}
+
+func (h *ImportHandler) ImportZip(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, maxZipUploadSize)
+	if err := r.ParseMultipartForm(maxZipUploadSize); err != nil {
+		var maxErr *http.MaxBytesError
+		if errors.As(err, &maxErr) {
+			respondError(w, http.StatusRequestEntityTooLarge, "FILE_TOO_LARGE", "ファイルサイズが大きすぎます（上限32MB）")
+			return
+		}
+		respondError(w, http.StatusBadRequest, "INVALID_REQUEST", "failed to parse form")
+		return
+	}
+
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "INVALID_REQUEST", "file field required")
+		return
+	}
+	defer file.Close()
+
+	if !strings.HasSuffix(strings.ToLower(header.Filename), ".zip") {
+		respondError(w, http.StatusBadRequest, "INVALID_FILE", "zip ファイルのみ対応しています")
+		return
+	}
+
+	result, err := h.importService.ImportZip(r.Context(), file, header.Size)
+	if err != nil {
+		if errors.Is(err, service.ErrInvalidZip) {
+			respondError(w, http.StatusBadRequest, "INVALID_ZIP", err.Error())
+			return
+		}
+		respondError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+		return
+	}
+
+	resp := zipImportResponse{
+		Imported: result.Imported,
+		Skipped:  make([]zipSkippedResponse, len(result.Skipped)),
+	}
+	for i, s := range result.Skipped {
+		resp.Skipped[i] = zipSkippedResponse{Date: s.Date, Reason: s.Reason}
+	}
+	respondJSON(w, http.StatusOK, map[string]interface{}{"data": resp})
 }

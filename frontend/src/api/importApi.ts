@@ -21,3 +21,26 @@ export async function importFile(file: File, overwrite = false): Promise<ImportR
   }
   return { entry: json.data as Entry, needsConfirm: false }
 }
+
+export interface ZipSkippedEntry {
+  date: string
+  reason: string
+}
+
+export interface ZipImportResult {
+  imported: number
+  skipped: ZipSkippedEntry[]
+}
+
+export async function importZip(file: File): Promise<ZipImportResult> {
+  const form = new FormData()
+  form.append('file', file)
+
+  const res = await fetch('/api/import/zip', { method: 'POST', body: form })
+  const json = await res.json()
+
+  if (!res.ok) {
+    throw new Error(json?.error?.message ?? 'import failed')
+  }
+  return json.data as ZipImportResult
+}

@@ -1,8 +1,11 @@
 package service
 
 import (
+	"archive/zip"
 	"context"
+	"errors"
 	"io"
+	"path"
 	"time"
 
 	"private_diary/internal/domain"
@@ -10,10 +13,23 @@ import (
 	"private_diary/internal/repository"
 )
 
+type ZipSkippedEntry struct {
+	Date   string
+	Reason string
+}
+
+type ZipImportResult struct {
+	Imported int
+	Skipped  []ZipSkippedEntry
+}
+
 type ImportService interface {
 	// Import imports a text file. Returns (entry, needsConfirm, error).
 	// needsConfirm=true means entry already exists and overwrite=false was passed.
 	Import(ctx context.Context, filename string, r io.Reader, overwrite bool) (*model.Entry, bool, error)
+	// ImportZip imports multiple text files from a ZIP archive.
+	// Files with invalid names are silently ignored. Files for existing dates are skipped and reported.
+	ImportZip(ctx context.Context, r io.ReaderAt, size int64) (*ZipImportResult, error)
 }
 
 type importService struct {
@@ -27,7 +43,7 @@ func NewImportService(repo repository.EntryRepository) ImportService {
 func (s *importService) Import(ctx context.Context, filename string, r io.Reader, overwrite bool) (*model.Entry, bool, error) {
 	date, err := domain.ParseImportFilename(filename)
 	if err != nil {
-		return nil, false, ErrInvalidFile
+		return nil, false, ErrInvalidFilename
 	}
 
 	bodyBytes, err := io.ReadAll(r)
@@ -69,4 +85,69 @@ func (s *importService) Import(ctx context.Context, filename string, r io.Reader
 		return nil, false, err
 	}
 	return entry, false, nil
+}
+
+func readZipEntry(f *zip.File) ([]byte, error) {
+	rc, err := f.Open()
+	if err != nil {
+		return nil, err
+	}
+	defer rc.Close()
+	return io.ReadAll(rc)
+}
+
+func (s *importService) ImportZip(ctx context.Context, r io.ReaderAt, size int64) (*ZipImportResult, error) {
+	zr, err := zip.NewReader(r, size)
+	if err != nil {
+		return nil, ErrInvalidZip
+	}
+
+	result := &ZipImportResult{
+		Skipped: make([]ZipSkippedEntry, 0),
+	}
+
+	now := time.Now()
+
+	for _, f := range zr.File {
+		if f.FileInfo().IsDir() {
+			continue
+		}
+
+		name := path.Base(f.Name)
+		date, err := domain.ParseImportFilename(name)
+		if err != nil {
+			if errors.Is(err, domain.ErrInvalidFilename) {
+				// invalid filename (e.g. .DS_Store) - silently ignore
+				continue
+			}
+			return nil, err
+		}
+
+		exists, err := s.repo.ExistsDate(ctx, date)
+		if err != nil {
+			return nil, err
+		}
+		if exists {
+			result.Skipped = append(result.Skipped, ZipSkippedEntry{Date: date, Reason: "already_exists"})
+			continue
+		}
+
+		bodyBytes, err := readZipEntry(f)
+		if err != nil {
+			return nil, err
+		}
+
+		entry := &model.Entry{
+			Date:      date,
+			Body:      string(bodyBytes),
+			CreatedAt: now,
+			UpdatedAt: now,
+		}
+		if err := s.repo.Save(ctx, entry); err != nil {
+			return nil, err
+		}
+		result.Imported++
+	}
+
+	return result, nil
 }
