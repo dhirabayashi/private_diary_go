@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"strconv"
 	"testing"
 	"time"
 
@@ -175,8 +174,8 @@ func TestEntryHandler_ExportSingle(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, rec.Code)
 	assert.Equal(t, "text/plain; charset=utf-8", rec.Header().Get("Content-Type"))
-	assert.Contains(t, rec.Header().Get("Content-Disposition"), "20240315.txt")
-	assert.Equal(t, strconv.Itoa(len("日記の本文です")), rec.Header().Get("Content-Length"))
+	assert.Equal(t, `attachment; filename=20240315.txt`, rec.Header().Get("Content-Disposition"))
+	assert.Equal(t, "21", rec.Header().Get("Content-Length"))
 	assert.Equal(t, "日記の本文です", rec.Body.String())
 }
 
