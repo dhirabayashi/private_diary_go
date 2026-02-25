@@ -211,10 +211,12 @@ func (h *EntryHandler) ExportSingle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	body := []byte(entry.Body)
 	filename := strings.ReplaceAll(entry.Date, "-", "") + ".txt"
 	w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": filename}))
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	if _, err := w.Write([]byte(entry.Body)); err != nil {
+	w.Header().Set("Content-Length", strconv.Itoa(len(body)))
+	if _, err := w.Write(body); err != nil {
 		slog.Error("failed to write export response", "error", err)
 	}
 }
