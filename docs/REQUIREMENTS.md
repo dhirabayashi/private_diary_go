@@ -169,6 +169,7 @@
 | GET | `/api/entries` | 日記一覧（ページネーション・検索対応） |
 | POST | `/api/entries` | 新規投稿 |
 | GET | `/api/entries/:date` | 特定日の日記取得（date: YYYY-MM-DD） |
+| GET | `/api/entries/:date/export` | 特定日の日記を `yyyyMMdd.txt` としてダウンロード（テキストのみ） |
 | PUT | `/api/entries/:date` | 特定日の日記更新 |
 | DELETE | `/api/entries/:date` | 特定日の日記削除 |
 | POST | `/api/entries/:date/images` | 画像アップロード |

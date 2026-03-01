@@ -157,6 +157,46 @@ func TestEntryHandler_GetByDate_NotFound(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, rec.Code)
 }
 
+func TestEntryHandler_ExportSingle(t *testing.T) {
+	esSvc := &mockEntryService{
+		getByDate: func(_ context.Context, date string) (*model.Entry, error) {
+			return makeEntry(date, "日記の本文です"), nil
+		},
+	}
+	h := handler.NewEntryHandler(esSvc, noImages())
+
+	r := chi.NewRouter()
+	r.Get("/{date}/export", h.ExportSingle)
+
+	req := httptest.NewRequest(http.MethodGet, "/2024-03-15/export", nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, "text/plain; charset=utf-8", rec.Header().Get("Content-Type"))
+	assert.Equal(t, `attachment; filename=20240315.txt`, rec.Header().Get("Content-Disposition"))
+	assert.Equal(t, "21", rec.Header().Get("Content-Length"))
+	assert.Equal(t, "日記の本文です", rec.Body.String())
+}
+
+func TestEntryHandler_ExportSingle_NotFound(t *testing.T) {
+	esSvc := &mockEntryService{
+		getByDate: func(_ context.Context, date string) (*model.Entry, error) {
+			return nil, service.ErrNotFound
+		},
+	}
+	h := handler.NewEntryHandler(esSvc, noImages())
+
+	r := chi.NewRouter()
+	r.Get("/{date}/export", h.ExportSingle)
+
+	req := httptest.NewRequest(http.MethodGet, "/2024-01-01/export", nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+}
+
 func TestEntryHandler_Delete(t *testing.T) {
 	esSvc := &mockEntryService{
 		delete: func(_ context.Context, date string) error { return nil },
