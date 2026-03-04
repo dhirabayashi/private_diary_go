@@ -49,6 +49,7 @@ export function EditEntryPage() {
           onSubmit={handleSubmit}
           submitLabel="更新する"
           dateReadOnly
+          autoSaveExistingDate={entry.entry_date}
         />
       </div>
     </PageLayout>
