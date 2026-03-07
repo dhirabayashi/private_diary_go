@@ -586,22 +586,60 @@ const router = createBrowserRouter([
 
 ### テスト
 
-- **ユニット/コンポーネントテスト**: `Vitest` + `React Testing Library`
-  - ユーザ操作を起点としたテスト（`userEvent`）
-  - APIはモックサーバ（`msw`）でスタブ化する
-- **対象**: 複雑なロジックを持つカスタムフック・ユーティリティ関数・重要なコンポーネント
+#### セットアップ
+
+以下の devDependencies を追加する。
+
+```
+vitest @testing-library/react @testing-library/jest-dom jsdom
+```
+
+`vite.config.ts` に `test` セクションを追加する。
 
 ```ts
-// hooks/useEntries.test.ts
-test('日記一覧を取得できる', async () => {
-  server.use(
-    http.get('/api/entries', () => HttpResponse.json({ data: mockEntries }))
-  );
-  const { result } = renderHook(() => useEntries({}), { wrapper });
-  await waitFor(() => expect(result.current.isSuccess).toBe(true));
-  expect(result.current.data).toHaveLength(2);
-});
+/// <reference types="vitest" />
+export default defineConfig({
+  // ...
+  test: {
+    environment: 'jsdom',
+    setupFiles: ['./src/test/setup.ts'],
+  },
+})
 ```
+
+`src/test/setup.ts` でマッチャーを登録する。
+
+```ts
+import '@testing-library/jest-dom'
+```
+
+`package.json` にテストスクリプトを追加する。
+
+```json
+"scripts": {
+  "test": "vitest run"
+}
+```
+
+#### テスト方針
+
+- **ユニット/コンポーネントテスト**: `Vitest` + `React Testing Library`
+  - ユーザ操作を起点としたテスト（`userEvent`）
+  - コンポーネントの統合テストではAPIを `msw` でスタブ化する
+  - カスタムフックの単体テストでは `vi.mock` でAPIモジュールを直接モックする
+- **対象**: 複雑なロジックを持つカスタムフック・ユーティリティ関数・重要なコンポーネント
+
+#### テストの実行
+
+```bash
+cd frontend && npm test         # フロントエンドテスト全件
+```
+
+Makefileからも実行できる（後述）。
+
+#### CIでの実行
+
+PRごとに GitHub Actions でフロントエンドテストとバックエンドテストの両方を実行する（`.github/workflows/test.yml` 参照）。
 
 ### その他のフロントエンド実装方針
 
