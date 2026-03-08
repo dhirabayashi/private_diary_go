@@ -42,6 +42,9 @@ export function useAutoSave({
 
   useEffect(() => {
     const save = async () => {
+      // 前回の保存が進行中なら並行実行を防ぐためスキップ
+      if (inFlightRef.current !== null) return
+
       const { date: currentDate, body: currentBody } = valuesRef.current
 
       // 本文が空なら保存しない
