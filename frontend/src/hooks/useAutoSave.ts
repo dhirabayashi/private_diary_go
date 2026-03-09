@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { entries } from '../api/entries'
 
 export type AutoSaveStatus = 'idle' | 'saving' | 'saved' | 'error'
@@ -28,6 +29,7 @@ export function useAutoSave({
   initialBody,
   intervalMs = 30000,
 }: UseAutoSaveOptions): UseAutoSaveReturn {
+  const queryClient = useQueryClient()
   const [status, setStatus] = useState<AutoSaveStatus>('idle')
   const [autoCreated, setAutoCreated] = useState(false)
   const createdDateRef = useRef<string | null>(existingDate ?? null)
@@ -60,13 +62,18 @@ export function useAutoSave({
             const entry = await entries.create({ date: currentDate, body: currentBody })
             createdDateRef.current = entry.entry_date
             setAutoCreated(true)
+            queryClient.invalidateQueries({ queryKey: ['entries'] })
+            queryClient.invalidateQueries({ queryKey: ['entry', entry.entry_date] })
           } else {
             // 既存エントリ：以降は update
             await entries.update(createdDateRef.current, currentBody)
+            queryClient.invalidateQueries({ queryKey: ['entries'] })
+            queryClient.invalidateQueries({ queryKey: ['entry', createdDateRef.current] })
           }
           lastSavedBodyRef.current = currentBody
           setStatus('saved')
-        } catch {
+        } catch (e) {
+          console.error('自動保存に失敗しました', e)
           setStatus('error')
         }
       })()
