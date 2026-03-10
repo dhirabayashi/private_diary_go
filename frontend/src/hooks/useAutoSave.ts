@@ -37,7 +37,7 @@ export function useAutoSave({
   const valuesRef = useRef({ date, body })
   const inFlightRef = useRef<Promise<void> | null>(null)
 
-  // refをレンダリングごとに最新値で更新（再マウントなし）
+  // refをレンダリングごとに最新値で更新（依存配列なし = 毎レンダリング後に実行して最新値を同期）
   useEffect(() => {
     valuesRef.current = { date, body }
   })
@@ -85,7 +85,7 @@ export function useAutoSave({
 
     const id = setInterval(save, intervalMs)
     return () => clearInterval(id)
-  }, [intervalMs])
+  }, [intervalMs, queryClient])
 
   return {
     status,

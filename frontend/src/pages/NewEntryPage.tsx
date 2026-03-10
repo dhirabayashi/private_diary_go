@@ -24,6 +24,8 @@ export function NewEntryPage() {
         showToast('日記を投稿しました')
         navigate(`/${autoSavedDate}`)
       } else {
+        // autoCreated === true のとき EntryForm が日付を readOnly にするため、
+        // autoSavedDate !== values.date のケースは自動保存前の手動投稿のみ。
         const entry = await createEntry(values)
         showToast('日記を投稿しました')
         navigate(`/${entry.entry_date}`)
