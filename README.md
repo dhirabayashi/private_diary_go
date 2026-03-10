@@ -130,8 +130,14 @@ npm run dev
 ## テスト
 
 ```bash
-# 全テスト実行
+# バックエンドテスト
 go test ./...
+
+# フロントエンドテスト
+cd frontend && npm test
+
+# 両方まとめて実行
+make test-all
 
 # カバレッジレポート（HTML）を生成
 make test-cover
@@ -139,12 +145,21 @@ make test-cover
 
 ### テスト構成
 
+**バックエンド**
+
 | レイヤー | 手法 |
 |---|---|
 | Domain | テーブル駆動テスト（モック不要） |
 | Repository | 実 SQLite インメモリ DB を使用 |
 | Service | Repository をモック化 |
 | Handler | `net/http/httptest` + Service をモック化 |
+
+**フロントエンド**
+
+| 対象 | 手法 |
+|---|---|
+| カスタムフック | `Vitest` + `renderHook` + `vi.mock` |
+| コンポーネント | `Vitest` + `React Testing Library` |
 
 ---
 
@@ -215,3 +230,4 @@ private_diary/
 - TanStack Query — サーバー状態管理
 - React Router v6 — SPA ルーティング
 - React Hook Form + Zod — フォーム・バリデーション
+- Vitest + React Testing Library — テスト

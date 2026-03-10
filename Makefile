@@ -1,4 +1,4 @@
-.PHONY: dev build test test-cover clean
+.PHONY: dev build test test-cover test-frontend test-all clean
 
 dev: ## Start backend server (frontend served by Vite separately)
 	go run . &
@@ -14,6 +14,11 @@ test: ## Run all backend tests
 test-cover: ## Run tests with coverage report
 	go test ./... -coverprofile=coverage.out
 	go tool cover -html=coverage.out
+
+test-frontend: ## Run all frontend tests
+	cd frontend && npm test
+
+test-all: test test-frontend ## Run all tests (backend + frontend)
 
 clean: ## Remove build artifacts
 	rm -f diary coverage.out

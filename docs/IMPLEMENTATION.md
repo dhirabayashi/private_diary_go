@@ -543,6 +543,22 @@ export const entries = {
 - `React Hook Form` を採用する
 - バリデーションは `zod` でスキーマ定義し、React Hook Form と統合する
 
+#### 自動保存
+
+入力中の日記を一定間隔でAPIへ自動保存する。ブラウザバックなどによる入力内容の消失を防ぐのが目的。
+
+**設計の意図:** このアプリは自分しか見ない日記であるため、「まだ書きかけの内容がDBに保存される」「投稿ボタンを押す前にエントリが作成される」といった状態を許容し、ドラフト管理などの複雑な仕組みを持たないシンプルな実装を選択している。
+
+**挙動:**
+
+- 編集ページ（`EditEntryPage`）: 既存エントリに対して `updateEntry` を定期的に呼ぶ
+- 新規ページ（`NewEntryPage`）: 初回の自動保存で `createEntry` を呼び、以降は `updateEntry` を呼ぶ
+
+**実装方針:**
+
+- `EntryForm` 内でフォームの値を `watch` し、30秒ごとのインターバルで変更があれば保存する
+- 自動保存中・完了はトースト等では通知せず、フォーム内にさりげなく状態表示する
+
 ```ts
 const schema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -570,22 +586,60 @@ const router = createBrowserRouter([
 
 ### テスト
 
-- **ユニット/コンポーネントテスト**: `Vitest` + `React Testing Library`
-  - ユーザ操作を起点としたテスト（`userEvent`）
-  - APIはモックサーバ（`msw`）でスタブ化する
-- **対象**: 複雑なロジックを持つカスタムフック・ユーティリティ関数・重要なコンポーネント
+#### セットアップ
+
+以下の devDependencies を追加する。
+
+```
+vitest @testing-library/react @testing-library/jest-dom jsdom
+```
+
+`vite.config.ts` に `test` セクションを追加する。
 
 ```ts
-// hooks/useEntries.test.ts
-test('日記一覧を取得できる', async () => {
-  server.use(
-    http.get('/api/entries', () => HttpResponse.json({ data: mockEntries }))
-  );
-  const { result } = renderHook(() => useEntries({}), { wrapper });
-  await waitFor(() => expect(result.current.isSuccess).toBe(true));
-  expect(result.current.data).toHaveLength(2);
-});
+/// <reference types="vitest" />
+export default defineConfig({
+  // ...
+  test: {
+    environment: 'jsdom',
+    setupFiles: ['./src/test/setup.ts'],
+  },
+})
 ```
+
+`src/test/setup.ts` でマッチャーを登録する。
+
+```ts
+import '@testing-library/jest-dom'
+```
+
+`package.json` にテストスクリプトを追加する。
+
+```json
+"scripts": {
+  "test": "vitest run"
+}
+```
+
+#### テスト方針
+
+- **ユニット/コンポーネントテスト**: `Vitest` + `React Testing Library`
+  - ユーザ操作を起点としたテスト（`userEvent`）
+  - コンポーネントの統合テストではAPIを `msw` でスタブ化する
+  - カスタムフックの単体テストでは `vi.mock` でAPIモジュールを直接モックする
+- **対象**: 複雑なロジックを持つカスタムフック・ユーティリティ関数・重要なコンポーネント
+
+#### テストの実行
+
+```bash
+cd frontend && npm test         # フロントエンドテスト全件
+```
+
+Makefileからも実行できる（後述）。
+
+#### CIでの実行
+
+PRごとに GitHub Actions でフロントエンドテストとバックエンドテストの両方を実行する（`.github/workflows/test.yml` 参照）。
 
 ### その他のフロントエンド実装方針
 
