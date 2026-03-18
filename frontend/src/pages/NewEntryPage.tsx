@@ -1,9 +1,14 @@
-import { useRef } from 'react'
+import { useRef, useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import { PageLayout } from '../components/layout/PageLayout'
 import { EntryForm, type EntryFormHandle } from '../components/features/EntryForm'
 import { useCreateEntry, useUpdateEntry } from '../hooks/useEntries'
 import { useToast } from '../components/ui/Toast'
+import { entries } from '../api/entries'
+
+// 'sv'（スウェーデン）ロケールは YYYY-MM-DD 形式を返すため、JST 日付を簡潔に取得するために利用している
+const today = () => new Date().toLocaleDateString('sv', { timeZone: 'Asia/Tokyo' })
 
 export function NewEntryPage() {
   const navigate = useNavigate()
@@ -11,6 +16,20 @@ export function NewEntryPage() {
   const { mutateAsync: updateEntry } = useUpdateEntry()
   const { showToast } = useToast()
   const formRef = useRef<EntryFormHandle>(null)
+  const [selectedDate, setSelectedDate] = useState(today())
+
+  const { data: existingEntry } = useQuery({
+    queryKey: ['entry', selectedDate],
+    queryFn: () => entries.getByDate(selectedDate),
+    enabled: !!selectedDate,
+    retry: false,
+  })
+
+  useEffect(() => {
+    if (existingEntry) {
+      navigate(`/${selectedDate}/edit`, { replace: true })
+    }
+  }, [existingEntry, selectedDate, navigate])
 
   const handleSubmit = async (values: { date: string; body: string }) => {
     try {
@@ -43,6 +62,7 @@ export function NewEntryPage() {
           ref={formRef}
           onSubmit={handleSubmit}
           submitLabel="投稿する"
+          onDateChange={setSelectedDate}
         />
       </div>
     </PageLayout>
