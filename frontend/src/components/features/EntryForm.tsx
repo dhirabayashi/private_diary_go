@@ -5,9 +5,7 @@ import { z } from 'zod'
 import { Button } from '../ui/Button'
 import { Label, Textarea, FieldError } from '../ui/Input'
 import { useAutoSave } from '../../hooks/useAutoSave'
-
-// 'sv'（スウェーデン）ロケールは YYYY-MM-DD 形式を返すため、JST 日付を簡潔に取得するために利用している
-const today = () => new Date().toLocaleDateString('sv', { timeZone: 'Asia/Tokyo' })
+import { today } from '../../utils/date'
 
 const schema = z.object({
   date: z

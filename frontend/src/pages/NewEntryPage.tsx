@@ -6,9 +6,7 @@ import { EntryForm, type EntryFormHandle } from '../components/features/EntryFor
 import { useCreateEntry, useUpdateEntry } from '../hooks/useEntries'
 import { useToast } from '../components/ui/Toast'
 import { entries } from '../api/entries'
-
-// 'sv'（スウェーデン）ロケールは YYYY-MM-DD 形式を返すため、JST 日付を簡潔に取得するために利用している
-const today = () => new Date().toLocaleDateString('sv', { timeZone: 'Asia/Tokyo' })
+import { today } from '../utils/date'
 
 export function NewEntryPage() {
   const navigate = useNavigate()
@@ -21,15 +19,15 @@ export function NewEntryPage() {
   const { data: existingEntry } = useQuery({
     queryKey: ['entry', selectedDate],
     queryFn: () => entries.getByDate(selectedDate),
-    enabled: !!selectedDate,
+    // selectedDate は today() で初期化され常に非空文字列のため enabled 指定は不要
     retry: false,
   })
 
   useEffect(() => {
     if (existingEntry) {
-      navigate(`/${selectedDate}/edit`, { replace: true })
+      navigate(`/${existingEntry.entry_date}/edit`, { replace: true })
     }
-  }, [existingEntry, selectedDate, navigate])
+  }, [existingEntry, navigate])
 
   const handleSubmit = async (values: { date: string; body: string }) => {
     try {
