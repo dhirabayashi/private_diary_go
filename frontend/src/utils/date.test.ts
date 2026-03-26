@@ -5,9 +5,11 @@ describe('today', () => {
     expect(today()).toMatch(/^\d{4}-\d{2}-\d{2}$/)
   })
 
-  it('未来の日付を返さない', () => {
-    const result = today()
-    const now = new Date().toLocaleDateString('sv', { timeZone: 'Asia/Tokyo' })
-    expect(result <= now).toBe(true)
+  it('JST の今日の日付を返す', () => {
+    // UTC 2026-03-25 15:00:00 = JST 2026-03-26 00:00:00
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-03-25T15:00:00Z'))
+    expect(today()).toBe('2026-03-26')
+    vi.useRealTimers()
   })
 })

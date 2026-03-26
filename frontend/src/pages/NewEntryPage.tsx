@@ -1,11 +1,9 @@
 import { useRef, useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
 import { PageLayout } from '../components/layout/PageLayout'
 import { EntryForm, type EntryFormHandle } from '../components/features/EntryForm'
-import { useCreateEntry, useUpdateEntry } from '../hooks/useEntries'
+import { useEntry, useCreateEntry, useUpdateEntry } from '../hooks/useEntries'
 import { useToast } from '../components/ui/Toast'
-import { entries } from '../api/entries'
 import { today } from '../utils/date'
 
 export function NewEntryPage() {
@@ -16,12 +14,7 @@ export function NewEntryPage() {
   const formRef = useRef<EntryFormHandle>(null)
   const [selectedDate, setSelectedDate] = useState(today())
 
-  const { data: existingEntry } = useQuery({
-    queryKey: ['entry', selectedDate],
-    queryFn: () => entries.getByDate(selectedDate),
-    // selectedDate は today() で初期化され常に非空文字列のため enabled 指定は不要
-    retry: false,
-  })
+  const { data: existingEntry } = useEntry(selectedDate)
 
   useEffect(() => {
     if (existingEntry) {

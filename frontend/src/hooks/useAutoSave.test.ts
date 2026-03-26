@@ -218,7 +218,7 @@ describe('useAutoSave', () => {
   })
 
   describe('キャッシュの無効化', () => {
-    it('create 成功後に entries と entry のキャッシュを無効化する', async () => {
+    it('create 成功後に entries のキャッシュを無効化する', async () => {
       mockCreate.mockResolvedValue(makeEntry())
       vi.spyOn(queryClient, 'invalidateQueries')
 
@@ -232,7 +232,7 @@ describe('useAutoSave', () => {
       })
 
       expect(queryClient.invalidateQueries).toHaveBeenCalledWith({ queryKey: ['entries'] })
-      expect(queryClient.invalidateQueries).toHaveBeenCalledWith({ queryKey: ['entry', '2026-03-04'] })
+      expect(queryClient.invalidateQueries).not.toHaveBeenCalledWith({ queryKey: ['entry', '2026-03-04'] })
     })
 
     it('update 成功後に entries と entry のキャッシュを無効化する', async () => {

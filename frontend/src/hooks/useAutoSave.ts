@@ -63,7 +63,6 @@ export function useAutoSave({
             createdDateRef.current = entry.entry_date
             setAutoCreated(true)
             queryClient.invalidateQueries({ queryKey: ['entries'] })
-            queryClient.invalidateQueries({ queryKey: ['entry', entry.entry_date] })
           } else {
             // 既存エントリ：以降は update
             await entries.update(createdDateRef.current, currentBody)
