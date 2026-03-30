@@ -255,7 +255,7 @@ describe('useAutoSave', () => {
       })
 
       expect(queryClient.invalidateQueries).toHaveBeenCalledWith({ queryKey: ['entries'] })
-      expect(queryClient.invalidateQueries).toHaveBeenCalledWith({ queryKey: ['entry', '2026-03-04'] })
+      expect(queryClient.invalidateQueries).not.toHaveBeenCalledWith({ queryKey: ['entry', '2026-03-04'] })
     })
 
     it('create が失敗したときはキャッシュを無効化しない', async () => {
