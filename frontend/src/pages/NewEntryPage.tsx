@@ -1,9 +1,10 @@
-import { useRef } from 'react'
+import { useRef, useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { PageLayout } from '../components/layout/PageLayout'
 import { EntryForm, type EntryFormHandle } from '../components/features/EntryForm'
-import { useCreateEntry, useUpdateEntry } from '../hooks/useEntries'
+import { useEntry, useCreateEntry, useUpdateEntry } from '../hooks/useEntries'
 import { useToast } from '../components/ui/Toast'
+import { today } from '../utils/date'
 
 export function NewEntryPage() {
   const navigate = useNavigate()
@@ -11,6 +12,15 @@ export function NewEntryPage() {
   const { mutateAsync: updateEntry } = useUpdateEntry()
   const { showToast } = useToast()
   const formRef = useRef<EntryFormHandle>(null)
+  const [selectedDate, setSelectedDate] = useState(today())
+
+  const { data: existingEntry } = useEntry(selectedDate)
+
+  useEffect(() => {
+    if (existingEntry) {
+      navigate(`/${existingEntry.entry_date}/edit`, { replace: true })
+    }
+  }, [existingEntry, navigate])
 
   const handleSubmit = async (values: { date: string; body: string }) => {
     try {
@@ -43,6 +53,7 @@ export function NewEntryPage() {
           ref={formRef}
           onSubmit={handleSubmit}
           submitLabel="投稿する"
+          onDateChange={setSelectedDate}
         />
       </div>
     </PageLayout>

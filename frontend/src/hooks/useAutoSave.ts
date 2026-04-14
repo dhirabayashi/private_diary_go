@@ -63,12 +63,14 @@ export function useAutoSave({
             createdDateRef.current = entry.entry_date
             setAutoCreated(true)
             queryClient.invalidateQueries({ queryKey: ['entries'] })
-            queryClient.invalidateQueries({ queryKey: ['entry', entry.entry_date] })
           } else {
             // 既存エントリ：以降は update
             await entries.update(createdDateRef.current, currentBody)
+            // NOTE: ['entry', date] は意図的に無効化しない。
+            // EditEntryPage はフォーム状態を react-hook-form で保持するため再フェッチ不要。
+            // NewEntryPage では useEntry(selectedDate) を参照しており、ここで無効化すると
+            // update 後に再フェッチが走り編集ページへ意図しないリダイレクトが発生する。
             queryClient.invalidateQueries({ queryKey: ['entries'] })
-            queryClient.invalidateQueries({ queryKey: ['entry', createdDateRef.current] })
           }
           lastSavedBodyRef.current = currentBody
           setStatus('saved')

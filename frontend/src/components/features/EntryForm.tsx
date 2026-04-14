@@ -1,13 +1,11 @@
-import { forwardRef, useImperativeHandle } from 'react'
+import { forwardRef, useImperativeHandle, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { Button } from '../ui/Button'
 import { Label, Textarea, FieldError } from '../ui/Input'
 import { useAutoSave } from '../../hooks/useAutoSave'
-
-// 'sv'（スウェーデン）ロケールは YYYY-MM-DD 形式を返すため、JST 日付を簡潔に取得するために利用している
-const today = () => new Date().toLocaleDateString('sv', { timeZone: 'Asia/Tokyo' })
+import { today } from '../../utils/date'
 
 const schema = z.object({
   date: z
@@ -31,6 +29,7 @@ interface EntryFormProps {
   submitLabel?: string
   dateReadOnly?: boolean
   autoSaveExistingDate?: string
+  onDateChange?: (date: string) => void
 }
 
 export const EntryForm = forwardRef<EntryFormHandle, EntryFormProps>(
@@ -41,6 +40,7 @@ export const EntryForm = forwardRef<EntryFormHandle, EntryFormProps>(
       submitLabel = '投稿する',
       dateReadOnly = false,
       autoSaveExistingDate,
+      onDateChange,
     },
     ref,
   ) {
@@ -65,6 +65,10 @@ export const EntryForm = forwardRef<EntryFormHandle, EntryFormProps>(
     })
 
     useImperativeHandle(ref, () => ({ getCreatedDate, awaitCurrentSave }))
+
+    useEffect(() => {
+      onDateChange?.(watchedDate)
+    }, [watchedDate, onDateChange])
 
     return (
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">

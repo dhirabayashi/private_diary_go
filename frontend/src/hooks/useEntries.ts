@@ -13,6 +13,7 @@ export function useEntry(date: string) {
     queryKey: ['entry', date],
     queryFn: () => entries.getByDate(date),
     enabled: !!date,
+    retry: false,
   })
 }
 
