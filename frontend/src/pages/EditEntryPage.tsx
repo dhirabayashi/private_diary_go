@@ -2,6 +2,7 @@ import { useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { PageLayout } from '../components/layout/PageLayout'
 import { EntryForm, type EntryFormHandle } from '../components/features/EntryForm'
+import { Button } from '../components/ui/Button'
 import { useEntry, useUpdateEntry } from '../hooks/useEntries'
 import { useToast } from '../components/ui/Toast'
 
@@ -48,6 +49,11 @@ export function EditEntryPage() {
   return (
     <PageLayout title="日記を編集">
       <div className="max-w-2xl">
+        <div className="mb-4">
+          <Button variant="ghost" size="sm" onClick={() => navigate(-1)}>
+            ← 戻る
+          </Button>
+        </div>
         <EntryForm
           ref={formRef}
           defaultValues={{ date: entry.entry_date, body: entry.body }}

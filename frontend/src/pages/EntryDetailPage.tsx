@@ -57,7 +57,10 @@ export function EntryDetailPage() {
         {/* Header */}
         <div className="mb-6 flex items-start justify-between gap-4">
           <div>
-            <time className="text-sm font-medium text-stone-500">{formatDate(entry.entry_date)}</time>
+            <Button variant="ghost" size="sm" onClick={() => navigate(-1)}>
+              ← 戻る
+            </Button>
+            <time className="text-sm font-medium text-stone-500 mt-2 block">{formatDate(entry.entry_date)}</time>
             <h1 className="text-2xl font-bold text-stone-800 mt-1">{formatDate(entry.entry_date)}の日記</h1>
           </div>
           <div className="flex items-center gap-2 shrink-0">

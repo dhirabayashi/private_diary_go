@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { PageLayout } from '../components/layout/PageLayout'
 import { EntryCard } from '../components/features/EntryCard'
@@ -12,11 +12,11 @@ export function SearchPage() {
   const [q, setQ] = useState(searchParams.get('q') ?? '')
   const [from, setFrom] = useState(searchParams.get('from') ?? '')
   const [to, setTo] = useState(searchParams.get('to') ?? '')
-  const [page, setPage] = useState(1)
 
   const query = searchParams.get('q') ?? ''
   const fromParam = searchParams.get('from') ?? ''
   const toParam = searchParams.get('to') ?? ''
+  const page = Number(searchParams.get('page') ?? '1')
 
   const { data, isLoading } = useEntries({
     q: query || undefined,
@@ -26,7 +26,14 @@ export function SearchPage() {
     page_size: 10,
   })
 
-  useEffect(() => { setPage(1) }, [query, fromParam, toParam])
+  const setPage = (p: number) => {
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev)
+      if (p === 1) next.delete('page')
+      else next.set('page', String(p))
+      return next
+    })
+  }
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
@@ -35,7 +42,6 @@ export function SearchPage() {
     if (from) params.from = from
     if (to) params.to = to
     setSearchParams(params)
-    setPage(1)
   }
 
   return (
