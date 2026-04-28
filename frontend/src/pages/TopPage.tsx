@@ -7,7 +7,14 @@ import { useEntries } from '../hooks/useEntries'
 export function TopPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const page = Number(searchParams.get('page') ?? '1')
-  const setPage = (p: number) => setSearchParams(p === 1 ? {} : { page: String(p) })
+  const setPage = (p: number) => {
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev)
+      if (p === 1) next.delete('page')
+      else next.set('page', String(p))
+      return next
+    })
+  }
   const { data, isLoading, isError } = useEntries({ page, page_size: 10 })
 
   return (
