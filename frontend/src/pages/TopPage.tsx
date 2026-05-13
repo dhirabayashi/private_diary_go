@@ -1,20 +1,11 @@
-import { useSearchParams } from 'react-router-dom'
 import { PageLayout } from '../components/layout/PageLayout'
 import { EntryCard } from '../components/features/EntryCard'
 import { Pagination } from '../components/ui/Pagination'
 import { useEntries } from '../hooks/useEntries'
+import { usePageParam } from '../hooks/usePageParam'
 
 export function TopPage() {
-  const [searchParams, setSearchParams] = useSearchParams()
-  const page = Number(searchParams.get('page') ?? '1')
-  const setPage = (p: number) => {
-    setSearchParams(prev => {
-      const next = new URLSearchParams(prev)
-      if (p === 1) next.delete('page')
-      else next.set('page', String(p))
-      return next
-    })
-  }
+  const { page, setPage } = usePageParam()
   const { data, isLoading, isError } = useEntries({ page, page_size: 10 })
 
   return (

@@ -80,8 +80,9 @@ describe('TopPage', () => {
     await screen.findByText('前へ')
     fireEvent.click(screen.getByText('前へ'))
     await waitFor(() => {
-      const pages = mockList.mock.calls.map(c => (c[0] as { page: number }).page)
-      expect(pages).toContain(1)
+      expect(mockList).toHaveBeenLastCalledWith(
+        expect.objectContaining({ page: 1, page_size: 10 }),
+      )
     })
   })
 })
