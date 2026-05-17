@@ -1,11 +1,11 @@
-import { useState } from 'react'
 import { PageLayout } from '../components/layout/PageLayout'
 import { EntryCard } from '../components/features/EntryCard'
 import { Pagination } from '../components/ui/Pagination'
 import { useEntries } from '../hooks/useEntries'
+import { usePageParam } from '../hooks/usePageParam'
 
 export function TopPage() {
-  const [page, setPage] = useState(1)
+  const { page, setPage } = usePageParam()
   const { data, isLoading, isError } = useEntries({ page, page_size: 10 })
 
   return (

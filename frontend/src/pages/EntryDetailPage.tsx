@@ -55,6 +55,11 @@ export function EntryDetailPage() {
     <PageLayout>
       <article className="max-w-2xl">
         {/* Header */}
+        <div className="mb-4">
+          <Button variant="ghost" size="sm" onClick={() => navigate(-1)}>
+            ← 戻る
+          </Button>
+        </div>
         <div className="mb-6 flex items-start justify-between gap-4">
           <div>
             <time className="text-sm font-medium text-stone-500">{formatDate(entry.entry_date)}</time>
