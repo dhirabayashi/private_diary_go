@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"strings"
 	"testing"
@@ -119,6 +120,32 @@ func TestImportService_Import(t *testing.T) {
 		var vce *service.VersionConflictError
 		require.ErrorAs(t, err, &vce)
 		assert.Equal(t, 2, vce.CurrentVersion)
+	})
+
+	t.Run("既存エントリあり・overwrite=true・version不一致の再確認時に対象が既に削除されていた場合はErrNotFound", func(t *testing.T) {
+		existing := &model.Entry{ID: 1, Date: "2024-03-15", Body: "旧本文", Version: 1}
+		calls := 0
+		repo := &mockEntryRepo{
+			existsDate: func(_ context.Context, date string) (bool, error) { return true, nil },
+			findByDate: func(_ context.Context, date string) (*model.Entry, error) {
+				calls++
+				if calls == 1 {
+					return existing, nil
+				}
+				// 2回目（競合検知後の再確認）では既に削除済み
+				return nil, nil
+			},
+			update: func(_ context.Context, e *model.Entry, expectedVersion int) (bool, error) {
+				return false, nil
+			},
+		}
+		svc := service.NewImportService(repo)
+		_, needsConfirm, err := svc.Import(ctx, "20240315.txt", strings.NewReader("新本文"), true)
+		require.Error(t, err)
+		assert.False(t, needsConfirm)
+		assert.ErrorIs(t, err, service.ErrNotFound, "競合ではなく削除なのでVersionConflictErrorではなくErrNotFoundになること")
+		var vce *service.VersionConflictError
+		assert.False(t, errors.As(err, &vce))
 	})
 }
 

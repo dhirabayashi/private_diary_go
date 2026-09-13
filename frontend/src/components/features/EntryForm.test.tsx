@@ -99,6 +99,18 @@ describe('EntryForm', () => {
     await waitFor(() => expect(forceSave).toHaveBeenCalledTimes(1))
   })
 
+  it('本文が空白文字のみのとき送信してもonSubmitが呼ばれず、バリデーションエラーが表示される', async () => {
+    const onSubmit = vi.fn()
+    render(<EntryForm onSubmit={onSubmit} defaultValues={{ body: '   ' }} />)
+
+    fireEvent.click(screen.getByRole('button', { name: '投稿する' }))
+
+    await waitFor(() => {
+      expect(screen.getByText('本文を入力してください')).toBeInTheDocument()
+    })
+    expect(onSubmit).not.toHaveBeenCalled()
+  })
+
   it('EntryFormHandle.save/isAutoCreated がuseAutoSaveの戻り値を反映する', () => {
     const save = vi.fn().mockResolvedValue(undefined)
     mockUseAutoSave.mockReturnValue({ ...baseAutoSave, save, autoCreated: true })

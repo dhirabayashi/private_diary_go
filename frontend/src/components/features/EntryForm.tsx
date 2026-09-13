@@ -12,7 +12,7 @@ const schema = z.object({
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/, '日付の形式が正しくありません')
     .refine((d) => d <= today(), { message: '未来の日付は選択できません' }),
-  body: z.string().min(1, '本文を入力してください'),
+  body: z.string().trim().min(1, '本文を入力してください'),
 })
 
 type FormValues = z.infer<typeof schema>

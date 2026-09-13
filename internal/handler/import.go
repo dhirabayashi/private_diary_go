@@ -61,13 +61,7 @@ func (h *ImportHandler) Import(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, service.ErrNotFound):
 			respondError(w, http.StatusNotFound, "NOT_FOUND", err.Error())
 		case errors.As(err, &vce):
-			respondJSON(w, http.StatusConflict, map[string]interface{}{
-				"error": map[string]interface{}{
-					"code":            "VERSION_CONFLICT",
-					"message":         vce.Error(),
-					"current_version": vce.CurrentVersion,
-				},
-			})
+			respondVersionConflict(w, vce)
 		default:
 			respondError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
 		}
