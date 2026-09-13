@@ -983,7 +983,8 @@ export async function fetchJson<T>(
    `EntryFormHandle`の`awaitCurrentSave`→`save`への置き換えと`NewEntryPage`/`EditEntryPage`の
    呼び出し側の追従（4.2.2.2節）
 6. **競合UI**: バナー・再読み込み導線の追加（4.2.4節）
-7. **AbortControllerの導入**（4.2.5節、任意・後回し可）
+7. **AbortControllerの導入**（4.2.5節）: 当初は任意・後回し可としていたが、5番の`useAutoSave`再設計と
+   同時に実装済み。アンマウント時にin-flightリクエストをキャンセルする。
 
 ## 6. テスト計画
 

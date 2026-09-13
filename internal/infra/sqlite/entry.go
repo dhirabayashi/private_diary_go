@@ -92,12 +92,18 @@ func (r *entryRepository) Update(ctx context.Context, entry *model.Entry, expect
 	return n > 0, nil
 }
 
-// isUniqueConstraintErr はerrがSQLiteのUNIQUE制約違反によるものかどうかを判定する
-// （プライマリの結果コード SQLITE_CONSTRAINT = 19。拡張コードが返っていても下位バイトに
-// プライマリコードが残るため、下位バイトのみで判定する）。
+// sqliteConstraintUnique はSQLiteの拡張結果コード SQLITE_CONSTRAINT_UNIQUE の値。
+// modernc.org/sqlite はこの値をエクスポートしていないため直接定義する。
+const sqliteConstraintUnique = 2067
+
+// isUniqueConstraintErr はerrがSQLiteのUNIQUE制約違反によるものかどうかを判定する。
+// 拡張結果コード（SQLITE_CONSTRAINT_UNIQUE = 2067）そのものを見ており、下位バイトの
+// プライマリコード（SQLITE_CONSTRAINT = 19、NOT NULL等の他のCONSTRAINT系違反も含む）
+// だけで判定しない。これにより、将来スキーマにNOT NULLやCHECK制約が増えても、
+// それらの違反を誤ってUNIQUE違反（＝ErrDuplicateDate）に混同しない。
 func isUniqueConstraintErr(err error) bool {
 	var sqliteErr *sqlitedriver.Error
-	return errors.As(err, &sqliteErr) && sqliteErr.Code()&0xff == 19
+	return errors.As(err, &sqliteErr) && sqliteErr.Code() == sqliteConstraintUnique
 }
 
 func (r *entryRepository) Delete(ctx context.Context, date string) error {

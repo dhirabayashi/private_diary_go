@@ -96,8 +96,11 @@ export const EntryForm = forwardRef<EntryFormHandle, EntryFormProps>(
       if (!window.confirm('サーバー上の他の変更を上書きして保存します。よろしいですか？')) return
       try {
         await forceSave()
-      } catch {
-        // 再度409だった場合はstatusが'conflict'に戻り、バナーが表示され続ける
+      } catch (e) {
+        // 再度409だった場合はstatusが'conflict'に戻り、バナーが表示され続ける。
+        // それ以外の失敗（ネットワークエラー等）はstatusが'error'になり下部に表示されるが、
+        // 明示的な操作の失敗なので併せてログにも残す。
+        console.error('保存の上書きに失敗しました', e)
       }
     }
 
