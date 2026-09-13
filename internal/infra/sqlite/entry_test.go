@@ -10,6 +10,7 @@ import (
 
 	"private_diary/internal/infra/sqlite"
 	"private_diary/internal/model"
+	"private_diary/internal/repository"
 )
 
 func newEntry(date, body string) *model.Entry {
@@ -31,6 +32,7 @@ func TestEntryRepository_SaveAndFindByDate(t *testing.T) {
 	require.NotNil(t, got)
 	assert.Equal(t, "2024-03-15", got.Date)
 	assert.Equal(t, "本文テスト", got.Body)
+	assert.Equal(t, 1, got.Version, "新規作成時のversionは1")
 }
 
 func TestEntryRepository_FindByDate_NotFound(t *testing.T) {
@@ -49,7 +51,7 @@ func TestEntryRepository_Save_DuplicateDate(t *testing.T) {
 
 	require.NoError(t, repo.Save(ctx, newEntry("2024-03-15", "初回")))
 	err := repo.Save(ctx, newEntry("2024-03-15", "重複"))
-	assert.Error(t, err, "UNIQUE制約でエラーになること")
+	assert.ErrorIs(t, err, repository.ErrConflict, "UNIQUE制約違反はErrConflictにマッピングされること")
 }
 
 func TestEntryRepository_Update(t *testing.T) {
@@ -62,11 +64,32 @@ func TestEntryRepository_Update(t *testing.T) {
 
 	e.Body = "更新後の本文"
 	e.UpdatedAt = time.Now()
-	require.NoError(t, repo.Update(ctx, e))
+	ok, err := repo.Update(ctx, e, 1)
+	require.NoError(t, err)
+	assert.True(t, ok, "expectedVersionが一致していれば更新されること")
 
 	got, err := repo.FindByDate(ctx, "2024-03-15")
 	require.NoError(t, err)
 	assert.Equal(t, "更新後の本文", got.Body)
+	assert.Equal(t, 2, got.Version, "更新のたびにversionが+1されること")
+}
+
+func TestEntryRepository_Update_VersionMismatch(t *testing.T) {
+	db := newTestDB(t)
+	repo := sqlite.NewEntryRepository(db)
+	ctx := context.Background()
+
+	e := newEntry("2024-03-15", "元の本文")
+	require.NoError(t, repo.Save(ctx, e))
+
+	e.Body = "更新後の本文"
+	ok, err := repo.Update(ctx, e, 999)
+	require.NoError(t, err)
+	assert.False(t, ok, "expectedVersionが不一致なら更新されないこと")
+
+	got, err := repo.FindByDate(ctx, "2024-03-15")
+	require.NoError(t, err)
+	assert.Equal(t, "元の本文", got.Body, "更新されず元の内容が残っていること")
 }
 
 func TestEntryRepository_Delete(t *testing.T) {

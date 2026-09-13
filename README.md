@@ -202,12 +202,12 @@ private_diary/
 | `GET` | `/api/entries` | 一覧取得（`page`, `page_size`, `q`, `from`, `to`） |
 | `POST` | `/api/entries` | 新規投稿 |
 | `GET` | `/api/entries/:date` | 特定日取得 |
-| `PUT` | `/api/entries/:date` | 更新 |
+| `PUT` | `/api/entries/:date` | 更新（リクエストボディに`version`が必須。サーバー側と不一致の場合は409 `VERSION_CONFLICT`） |
 | `DELETE` | `/api/entries/:date` | 削除 |
 | `POST` | `/api/entries/:date/images` | 画像アップロード |
 | `GET` | `/api/entries/:date/export` | 単一記事を `.txt` でダウンロード |
 | `DELETE` | `/api/images/:id` | 画像削除 |
-| `POST` | `/api/import` | `.txt` ファイルインポート（単一ファイル） |
+| `POST` | `/api/import` | `.txt` ファイルインポート（単一ファイル。overwrite時にversion不一致があれば409 `VERSION_CONFLICT`） |
 | `POST` | `/api/import/zip` | ZIP 一括インポート |
 | `GET` | `/api/export` | ZIP エクスポート（`from`, `to`） |
 

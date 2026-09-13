@@ -1,5 +1,5 @@
-import { createElement, forwardRef, type ReactNode } from 'react'
-import { render, act } from '@testing-library/react'
+import { createElement, forwardRef, useImperativeHandle, type ReactNode } from 'react'
+import { render, act, screen, fireEvent, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { NewEntryPage } from './NewEntryPage'
@@ -20,18 +20,34 @@ vi.mock('react-router-dom', async (importOriginal) => {
   return { ...actual, useNavigate: () => mockNavigate }
 })
 
+const { mockShowToast, mockSave, mockGetCreatedDate } = vi.hoisted(() => ({
+  mockShowToast: vi.fn(),
+  mockSave: vi.fn().mockResolvedValue(undefined),
+  mockGetCreatedDate: vi.fn(() => '2026-03-19'),
+}))
+
 vi.mock('../components/ui/Toast', () => ({
-  useToast: () => ({ showToast: vi.fn() }),
+  useToast: () => ({ showToast: mockShowToast }),
 }))
 
 // onDateChange を各テストから呼び出せるようにキャプチャする
 let capturedOnDateChange: ((date: string) => void) | undefined
 
 vi.mock('../components/features/EntryForm', () => ({
-  EntryForm: forwardRef(({ onDateChange }: { onDateChange?: (date: string) => void }, _ref) => {
-    capturedOnDateChange = onDateChange
-    return null
-  }),
+  EntryForm: forwardRef(
+    (
+      { onDateChange, onSubmit }: { onDateChange?: (date: string) => void; onSubmit: () => Promise<void> },
+      ref,
+    ) => {
+      capturedOnDateChange = onDateChange
+      useImperativeHandle(ref, () => ({
+        save: mockSave,
+        getCreatedDate: mockGetCreatedDate,
+        isAutoCreated: () => false,
+      }))
+      return createElement('button', { onClick: () => onSubmit() }, '投稿する')
+    },
+  ),
 }))
 
 vi.mock('../components/layout/PageLayout', () => ({
@@ -43,6 +59,7 @@ const mockGetByDate = vi.mocked(entries.getByDate)
 const makeEntry = (overrides: Partial<Entry> = {}): Entry => ({
   id: 1,
   entry_date: '2026-03-19',
+  version: 1,
   body: 'テスト',
   created_at: '2026-03-19T00:00:00Z',
   updated_at: '2026-03-19T00:00:00Z',
@@ -63,6 +80,8 @@ describe('NewEntryPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     capturedOnDateChange = undefined
+    mockSave.mockReset().mockResolvedValue(undefined)
+    mockGetCreatedDate.mockReset().mockReturnValue('2026-03-19')
   })
 
   it('選択日付に既存の日記がある場合、編集画面にリダイレクトする', async () => {
@@ -110,5 +129,25 @@ describe('NewEntryPage', () => {
     await vi.waitFor(() => {
       expect(mockNavigate).toHaveBeenCalledWith('/2026-01-01/edit', { replace: true })
     })
+  })
+
+  it('save()が通常のエラーで失敗した場合はエラーメッセージのトーストを表示する', async () => {
+    mockGetByDate.mockRejectedValue(new Error('NOT_FOUND'))
+    mockSave.mockRejectedValueOnce(new Error('network error'))
+
+    render(createElement(NewEntryPage), { wrapper: createWrapper() })
+    fireEvent.click(screen.getByRole('button', { name: '投稿する' }))
+
+    await waitFor(() => expect(mockShowToast).toHaveBeenCalledWith('network error', 'error'))
+  })
+
+  it('save()が成功したら投稿完了のトーストを表示しgetCreatedDate()の日付へnavigateする', async () => {
+    mockGetByDate.mockRejectedValue(new Error('NOT_FOUND'))
+
+    render(createElement(NewEntryPage), { wrapper: createWrapper() })
+    fireEvent.click(screen.getByRole('button', { name: '投稿する' }))
+
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/2026-03-19'))
+    expect(mockShowToast).toHaveBeenCalledWith('日記を投稿しました')
   })
 })

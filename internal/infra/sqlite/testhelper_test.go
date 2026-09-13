@@ -22,6 +22,7 @@ func newTestDB(t *testing.T) *sql.DB {
 			id         INTEGER PRIMARY KEY AUTOINCREMENT,
 			entry_date TEXT    NOT NULL UNIQUE,
 			body       TEXT    NOT NULL DEFAULT '',
+			version    INTEGER NOT NULL DEFAULT 1,
 			created_at TEXT    NOT NULL,
 			updated_at TEXT    NOT NULL
 		)`,

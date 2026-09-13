@@ -32,6 +32,7 @@ func migrate(db *sql.DB) error {
 			id         INTEGER PRIMARY KEY AUTOINCREMENT,
 			entry_date TEXT    NOT NULL UNIQUE,
 			body       TEXT    NOT NULL DEFAULT '',
+			version    INTEGER NOT NULL DEFAULT 1,
 			created_at TEXT    NOT NULL,
 			updated_at TEXT    NOT NULL
 		)`,
@@ -48,6 +49,26 @@ func migrate(db *sql.DB) error {
 		if _, err := db.Exec(stmt); err != nil {
 			return fmt.Errorf("exec %q: %w", stmt[:min(len(stmt), 40)], err)
 		}
+	}
+	return addVersionColumnIfMissing(db)
+}
+
+// addVersionColumnIfMissing は version列導入前に作られた既存DBに対して、
+// 起動時に一度だけ列を追加する。新規DBは上のCREATE TABLEで既にversion列を持つため、
+// ここでは何もしない（ALTER TABLEは同じ列に対して2回実行するとエラーになるため）。
+func addVersionColumnIfMissing(db *sql.DB) error {
+	var count int
+	err := db.QueryRow(
+		`SELECT COUNT(*) FROM pragma_table_info('entries') WHERE name = 'version'`,
+	).Scan(&count)
+	if err != nil {
+		return fmt.Errorf("check version column: %w", err)
+	}
+	if count > 0 {
+		return nil
+	}
+	if _, err := db.Exec(`ALTER TABLE entries ADD COLUMN version INTEGER NOT NULL DEFAULT 1`); err != nil {
+		return fmt.Errorf("add version column: %w", err)
 	}
 	return nil
 }

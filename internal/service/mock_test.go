@@ -13,7 +13,7 @@ type mockEntryRepo struct {
 	findByDate    func(ctx context.Context, date string) (*model.Entry, error)
 	list          func(ctx context.Context, params model.ListParams) ([]*model.Entry, int, error)
 	save          func(ctx context.Context, entry *model.Entry) error
-	update        func(ctx context.Context, entry *model.Entry) error
+	update        func(ctx context.Context, entry *model.Entry, expectedVersion int) (bool, error)
 	delete        func(ctx context.Context, date string) error
 	existsDate    func(ctx context.Context, date string) (bool, error)
 	listForExport func(ctx context.Context, from, to string) ([]*model.Entry, error)
@@ -28,8 +28,8 @@ func (m *mockEntryRepo) List(ctx context.Context, p model.ListParams) ([]*model.
 func (m *mockEntryRepo) Save(ctx context.Context, e *model.Entry) error {
 	return m.save(ctx, e)
 }
-func (m *mockEntryRepo) Update(ctx context.Context, e *model.Entry) error {
-	return m.update(ctx, e)
+func (m *mockEntryRepo) Update(ctx context.Context, e *model.Entry, expectedVersion int) (bool, error) {
+	return m.update(ctx, e, expectedVersion)
 }
 func (m *mockEntryRepo) Delete(ctx context.Context, date string) error {
 	return m.delete(ctx, date)

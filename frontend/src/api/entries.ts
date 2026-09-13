@@ -18,16 +18,18 @@ export const entries = {
   getByDate: (date: string) =>
     fetchJson<Entry>(`/api/entries/${date}`),
 
-  create: (data: { date: string; body: string }) =>
+  create: (data: { date: string; body: string }, signal?: AbortSignal) =>
     fetchJson<Entry>('/api/entries', {
       method: 'POST',
       body: JSON.stringify(data),
+      signal,
     }),
 
-  update: (date: string, body: string) =>
+  update: (date: string, body: string, version: number, signal?: AbortSignal) =>
     fetchJson<Entry>(`/api/entries/${date}`, {
       method: 'PUT',
-      body: JSON.stringify({ body }),
+      body: JSON.stringify({ body, version }),
+      signal,
     }),
 
   delete: (date: string) =>

@@ -108,6 +108,49 @@ func TestImportHandler_Import_AlreadyExists_ReturnsConflict(t *testing.T) {
 	assert.Equal(t, "ALREADY_EXISTS", errObj["code"])
 }
 
+func TestImportHandler_Import_VersionConflict(t *testing.T) {
+	importSvc := &mockImportService{
+		importFn: func(_ context.Context, filename string, r io.Reader, overwrite bool) (*model.Entry, bool, error) {
+			return nil, false, &service.VersionConflictError{CurrentVersion: 5}
+		},
+	}
+	h := handler.NewImportHandler(importSvc)
+
+	buf, ct := makeMultipartFile(t, "file", "20240315.txt", "本文")
+	req := httptest.NewRequest(http.MethodPost, "/api/import", buf)
+	req.Header.Set("Content-Type", ct)
+	rec := httptest.NewRecorder()
+	h.Import(rec, req)
+
+	assert.Equal(t, http.StatusConflict, rec.Code)
+	var resp map[string]interface{}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	errObj := resp["error"].(map[string]interface{})
+	assert.Equal(t, "VERSION_CONFLICT", errObj["code"])
+	assert.EqualValues(t, 5, errObj["current_version"])
+}
+
+func TestImportHandler_Import_NotFound(t *testing.T) {
+	importSvc := &mockImportService{
+		importFn: func(_ context.Context, filename string, r io.Reader, overwrite bool) (*model.Entry, bool, error) {
+			return nil, false, service.ErrNotFound
+		},
+	}
+	h := handler.NewImportHandler(importSvc)
+
+	buf, ct := makeMultipartFile(t, "file", "20240315.txt", "本文")
+	req := httptest.NewRequest(http.MethodPost, "/api/import", buf)
+	req.Header.Set("Content-Type", ct)
+	rec := httptest.NewRecorder()
+	h.Import(rec, req)
+
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+	var resp map[string]interface{}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	errObj := resp["error"].(map[string]interface{})
+	assert.Equal(t, "NOT_FOUND", errObj["code"])
+}
+
 func TestImportHandler_ImportZip_Success(t *testing.T) {
 	importSvc := &mockImportService{
 		importZipFn: func(_ context.Context, r io.ReaderAt, size int64) (*service.ZipImportResult, error) {

@@ -54,11 +54,17 @@ func (h *ImportHandler) Import(w http.ResponseWriter, r *http.Request) {
 
 	entry, needsConfirm, err := h.importService.Import(r.Context(), header.Filename, file, overwrite)
 	if err != nil {
-		if errors.Is(err, service.ErrInvalidFilename) {
+		var vce *service.VersionConflictError
+		switch {
+		case errors.Is(err, service.ErrInvalidFilename):
 			respondError(w, http.StatusBadRequest, "INVALID_FILE", err.Error())
-			return
+		case errors.Is(err, service.ErrNotFound):
+			respondError(w, http.StatusNotFound, "NOT_FOUND", err.Error())
+		case errors.As(err, &vce):
+			respondVersionConflict(w, vce)
+		default:
+			respondError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
 		}
-		respondError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
 		return
 	}
 

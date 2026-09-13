@@ -146,6 +146,7 @@
 | `id` | INTEGER PRIMARY KEY | 自動採番 |
 | `entry_date` | TEXT (YYYY-MM-DD) | 日記の日付（UNIQUE） |
 | `body` | TEXT | 本文 |
+| `version` | INTEGER | 楽観ロック用のバージョン番号。作成時1、更新ごとに+1 |
 | `created_at` | TEXT (ISO8601) | 作成日時 |
 | `updated_at` | TEXT (ISO8601) | 更新日時 |
 
@@ -170,11 +171,11 @@
 | POST | `/api/entries` | 新規投稿 |
 | GET | `/api/entries/:date` | 特定日の日記取得（date: YYYY-MM-DD） |
 | GET | `/api/entries/:date/export` | 特定日の日記を `yyyyMMdd.txt` としてダウンロード（テキストのみ） |
-| PUT | `/api/entries/:date` | 特定日の日記更新 |
+| PUT | `/api/entries/:date` | 特定日の日記更新（リクエストボディに更新元の`version`が必須。サーバー側と不一致の場合は409 `VERSION_CONFLICT`を返す。楽観ロック） |
 | DELETE | `/api/entries/:date` | 特定日の日記削除 |
 | POST | `/api/entries/:date/images` | 画像アップロード |
 | DELETE | `/api/images/:id` | 画像削除 |
-| POST | `/api/import` | txtファイルインポート（単一ファイル） |
+| POST | `/api/import` | txtファイルインポート（単一ファイル。overwrite時にversion不一致があれば409 `VERSION_CONFLICT`） |
 | POST | `/api/import/zip` | ZIPファイル一括インポート |
 | GET | `/api/export` | ZIPエクスポート（クエリパラメータ: from, to） |
 

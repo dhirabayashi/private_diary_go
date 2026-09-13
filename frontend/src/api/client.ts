@@ -3,6 +3,8 @@ export class ApiError extends Error {
     public readonly code: string,
     message: string,
     public readonly status: number,
+    // VERSION_CONFLICT時のみ設定される、サーバー側の競合発生時点での最新version
+    public readonly currentVersion?: number,
   ) {
     super(message)
     this.name = 'ApiError'
@@ -14,7 +16,8 @@ async function handleResponse<T>(res: Response): Promise<T> {
   if (!res.ok || 'error' in json) {
     const code = json?.error?.code ?? 'UNKNOWN'
     const message = json?.error?.message ?? res.statusText
-    throw new ApiError(code, message, res.status)
+    const currentVersion = json?.error?.current_version
+    throw new ApiError(code, message, res.status, currentVersion)
   }
   return json.data as T
 }
