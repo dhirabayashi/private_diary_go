@@ -116,10 +116,13 @@ export function useAutoSave({
       setStatus('saved')
       settle(round.resolve)
     } catch (e) {
-      // アンマウント等でabortされた場合は、進行中の呼び出し元に「保存できなかった」ことだけ伝え、
-      // エラー表示（status/console.error）はしない（ユーザー起因の失敗ではないため）。
+      // アンマウントによるabortの場合、このラウンドを待っている相手は既に画面を離れた
+      // コンポーネントのクロージャだけなので、resolve/rejectのどちらもせず未解決のまま
+      // 放置する（＝合流待ちの次ラウンドを起動するsettle()も呼ばない）。キャンセルを
+      // エラーとして呼び出し元に伝播させると、「アンマウント時は特別扱いする」という
+      // 判断を全呼び出し元に強制することになるため、ここで完全に握りつぶすのが正しい。
       if (e instanceof DOMException && e.name === 'AbortError') {
-        settle(() => round.reject(e))
+        activeRoundRef.current = null
         return
       }
       if (e instanceof ApiError && e.code === 'VERSION_CONFLICT') {
@@ -176,6 +179,11 @@ export function useAutoSave({
   useEffect(() => {
     return () => {
       abortControllerRef.current?.abort()
+      // 合流待ちだった次ラウンドは、参照を外すだけで良い（interval側もclearIntervalで停止し、
+      // 以後このコンポーネントから新たなラウンドが積まれることはないため）。そのPromiseは
+      // 未解決のまま残るが、待っているのは既にアンマウントしたコンポーネント側のクロージャのみ
+      // なので実害はない。
+      nextRoundRef.current = null
     }
   }, [])
 

@@ -626,5 +626,81 @@ describe('useAutoSave', () => {
 
       expect(() => unmount()).not.toThrow()
     })
+
+    it('合流待ちの次ラウンドがある状態でアンマウントしても、そのラウンドのために新規リクエストは飛ばない', async () => {
+      let resolveFirst!: (value: Entry) => void
+      const firstCreate = new Promise<Entry>((resolve) => {
+        resolveFirst = resolve
+      })
+      mockCreate.mockReturnValueOnce(firstCreate)
+
+      const { result, unmount } = renderHook(
+        () => useAutoSave({ date: '2026-03-04', body: '1回目の内容' }),
+        { wrapper },
+      )
+
+      let firstSavePromise!: Promise<void>
+      act(() => {
+        firstSavePromise = result.current.save()
+      })
+      expect(mockCreate).toHaveBeenCalledTimes(1)
+
+      // 1回目が進行中のまま、2回目のsave()が合流待ち（nextRoundRef）に積まれる。
+      // アンマウント後は誰も結果を必要としないため、このPromiseは意図的に未解決のまま
+      // 放置される（resolve/rejectいずれも起きない）ことを確認する。
+      let secondSettled = false
+      act(() => {
+        result.current.save().then(
+          () => { secondSettled = true },
+          () => { secondSettled = true },
+        )
+      })
+      expect(mockCreate).toHaveBeenCalledTimes(1)
+
+      unmount()
+
+      // 1回目（進行中だったリクエスト）は後から普通に解決する
+      await act(async () => {
+        resolveFirst(makeEntry({ version: 1 }))
+        await firstSavePromise
+      })
+
+      // 合流待ちだった2回目のために新規リクエストは発火せず、Promiseも未解決のまま
+      expect(secondSettled).toBe(false)
+      expect(mockCreate).toHaveBeenCalledTimes(1)
+      expect(mockUpdate).not.toHaveBeenCalled()
+    })
+
+    it('in-flightリクエストが実際にabort由来のエラーで失敗しても、そのラウンドのPromiseは未解決のまま残る（誰にも伝播しない）', async () => {
+      let rejectCreate!: (e: unknown) => void
+      const pendingCreate = new Promise<Entry>((_resolve, reject) => {
+        rejectCreate = reject
+      })
+      mockCreate.mockReturnValueOnce(pendingCreate)
+
+      const { result, unmount } = renderHook(
+        () => useAutoSave({ date: '2026-03-04', body: '日記内容' }),
+        { wrapper },
+      )
+
+      let settled = false
+      act(() => {
+        result.current.save().then(
+          () => { settled = true },
+          () => { settled = true },
+        )
+      })
+
+      unmount()
+
+      // 実際のfetchがAbortControllerによってabortされ、AbortErrorで拒否された場合を模す
+      await act(async () => {
+        rejectCreate(new DOMException('The operation was aborted', 'AbortError'))
+        await Promise.resolve()
+        await Promise.resolve()
+      })
+
+      expect(settled).toBe(false)
+    })
   })
 })

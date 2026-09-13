@@ -92,6 +92,34 @@ func TestImportService_Import(t *testing.T) {
 		assert.Equal(t, "新本文", entry.Body)
 		assert.Equal(t, 2, entry.Version)
 	})
+
+	t.Run("既存エントリあり・overwrite=true・自動保存等によるversion不一致 → VersionConflictErrorを返す", func(t *testing.T) {
+		existing := &model.Entry{ID: 1, Date: "2024-03-15", Body: "旧本文", Version: 1}
+		current := &model.Entry{ID: 1, Date: "2024-03-15", Body: "自動保存後の本文", Version: 2}
+		calls := 0
+		repo := &mockEntryRepo{
+			existsDate: func(_ context.Context, date string) (bool, error) { return true, nil },
+			findByDate: func(_ context.Context, date string) (*model.Entry, error) {
+				calls++
+				if calls == 1 {
+					return existing, nil
+				}
+				return current, nil
+			},
+			update: func(_ context.Context, e *model.Entry, expectedVersion int) (bool, error) {
+				return false, nil
+			},
+		}
+		svc := service.NewImportService(repo)
+		_, needsConfirm, err := svc.Import(ctx, "20240315.txt", strings.NewReader("新本文"), true)
+		require.Error(t, err)
+		assert.False(t, needsConfirm)
+		assert.ErrorIs(t, err, service.ErrVersionConflict,
+			"entry.goのUpdateフローと同じくラップされたVersionConflictErrorであること（プレーンなErrVersionConflictではなく409相当として扱えること）")
+		var vce *service.VersionConflictError
+		require.ErrorAs(t, err, &vce)
+		assert.Equal(t, 2, vce.CurrentVersion)
+	})
 }
 
 func TestImportService_ImportZip(t *testing.T) {

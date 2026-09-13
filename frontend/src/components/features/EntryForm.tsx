@@ -82,9 +82,14 @@ export const EntryForm = forwardRef<EntryFormHandle, EntryFormProps>(
     }, [watchedDate, onDateChange])
 
     const handleReload = async () => {
-      const { body: latestBody } = await reloadFromServer()
-      // 読み込み直した内容を「初期値」として扱い、直後の自動保存の変化検知対象から外す
-      setValue('body', latestBody, { shouldDirty: false })
+      try {
+        const { body: latestBody } = await reloadFromServer()
+        // 読み込み直した内容を「初期値」として扱い、直後の自動保存の変化検知対象から外す
+        setValue('body', latestBody, { shouldDirty: false })
+      } catch (e) {
+        // 失敗してもstatusは'conflict'のままなのでバナーは表示され続け、再試行できる
+        console.error('最新の内容の取得に失敗しました', e)
+      }
     }
 
     const handleForceSave = async () => {
@@ -139,7 +144,7 @@ export const EntryForm = forwardRef<EntryFormHandle, EntryFormProps>(
         )}
 
         <div className="flex items-center gap-4">
-          <Button type="submit" loading={isSubmitting} size="lg">
+          <Button type="submit" loading={isSubmitting} disabled={autoSaveStatus === 'conflict'} size="lg">
             {submitLabel}
           </Button>
           <span className="text-xs text-stone-400">

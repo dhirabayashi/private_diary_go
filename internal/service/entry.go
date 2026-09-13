@@ -79,15 +79,11 @@ func (s *entryService) Update(ctx context.Context, date, body string, expectedVe
 		return nil, err
 	}
 	if !ok {
-		current, err := s.repo.FindByDate(ctx, date)
+		vce, err := resolveVersionConflict(ctx, s.repo, date)
 		if err != nil {
 			return nil, err
 		}
-		currentVersion := expectedVersion
-		if current != nil {
-			currentVersion = current.Version
-		}
-		return nil, &VersionConflictError{CurrentVersion: currentVersion}
+		return nil, vce
 	}
 	entry.Version = expectedVersion + 1
 	return entry, nil

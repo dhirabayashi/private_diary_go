@@ -36,6 +36,18 @@ describe('EntryForm', () => {
     expect(screen.getByRole('button', { name: 'このまま自分の内容で保存する' })).toBeInTheDocument()
   })
 
+  it('conflict状態のとき投稿ボタンが無効化される', () => {
+    mockUseAutoSave.mockReturnValue({ ...baseAutoSave, status: 'conflict' })
+    render(<EntryForm onSubmit={vi.fn()} defaultValues={{ body: '本文' }} />)
+
+    expect(screen.getByRole('button', { name: '投稿する' })).toBeDisabled()
+  })
+
+  it('conflict状態でなければ投稿ボタンは無効化されない', () => {
+    render(<EntryForm onSubmit={vi.fn()} defaultValues={{ body: '本文' }} />)
+    expect(screen.getByRole('button', { name: '投稿する' })).not.toBeDisabled()
+  })
+
   it('「最新の内容を読み込み直す」クリックで本文フィールドがreloadFromServerの返り値に置き換わる', async () => {
     const reloadFromServer = vi.fn().mockResolvedValue({ body: 'サーバー側の最新内容', version: 5 })
     mockUseAutoSave.mockReturnValue({ ...baseAutoSave, status: 'conflict', reloadFromServer })
@@ -48,6 +60,21 @@ describe('EntryForm', () => {
       expect(screen.getByLabelText(/本文/)).toHaveValue('サーバー側の最新内容')
     })
     expect(reloadFromServer).toHaveBeenCalledTimes(1)
+  })
+
+  it('「最新の内容を読み込み直す」がエラーで失敗しても例外が伝播せず、バナーが表示され続ける', async () => {
+    const reloadFromServer = vi.fn().mockRejectedValue(new Error('network error'))
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    mockUseAutoSave.mockReturnValue({ ...baseAutoSave, status: 'conflict', reloadFromServer })
+
+    render(<EntryForm onSubmit={vi.fn()} defaultValues={{ body: '自分の入力内容' }} />)
+    fireEvent.click(screen.getByRole('button', { name: '最新の内容を読み込み直す' }))
+
+    await waitFor(() => expect(reloadFromServer).toHaveBeenCalledTimes(1))
+    expect(screen.getByRole('alert')).toBeInTheDocument()
+    expect(screen.getByLabelText(/本文/)).toHaveValue('自分の入力内容')
+
+    consoleErrorSpy.mockRestore()
   })
 
   it('「このまま自分の内容で保存する」は確認ダイアログでキャンセルするとforceSaveを呼ばない', () => {

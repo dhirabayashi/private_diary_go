@@ -161,6 +161,30 @@ func TestEntryService_Update(t *testing.T) {
 		require.ErrorAs(t, err, &vce)
 		assert.Equal(t, 5, vce.CurrentVersion)
 	})
+
+	t.Run("異常: version不一致の再確認時に対象が既に削除されていた場合はErrNotFound", func(t *testing.T) {
+		existing := &model.Entry{ID: 1, Date: "2024-03-15", Body: "旧本文", Version: 3}
+		calls := 0
+		repo := &mockEntryRepo{
+			findByDate: func(_ context.Context, date string) (*model.Entry, error) {
+				calls++
+				if calls == 1 {
+					return existing, nil
+				}
+				// 2回目（競合検知後の再確認）では既に削除済み
+				return nil, nil
+			},
+			update: func(_ context.Context, e *model.Entry, expectedVersion int) (bool, error) {
+				return false, nil
+			},
+		}
+		svc := service.NewEntryService(repo, noopImageRepo(), noopStorage())
+		_, err := svc.Update(ctx, "2024-03-15", "新本文", 3)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, service.ErrNotFound, "競合ではなく削除なのでVersionConflictErrorではなくErrNotFoundになること")
+		var vce *service.VersionConflictError
+		assert.False(t, errors.As(err, &vce))
+	})
 }
 
 func TestEntryService_Delete(t *testing.T) {
