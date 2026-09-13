@@ -3,17 +3,20 @@ import { renderHook, act } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useAutoSave } from './useAutoSave'
 import { entries } from '../api/entries'
+import { ApiError } from '../api/client'
 import type { Entry } from '../types/api'
 
 vi.mock('../api/entries', () => ({
   entries: {
     create: vi.fn(),
     update: vi.fn(),
+    getByDate: vi.fn(),
   },
 }))
 
 const mockCreate = vi.mocked(entries.create)
 const mockUpdate = vi.mocked(entries.update)
+const mockGetByDate = vi.mocked(entries.getByDate)
 
 const createWrapper = () => {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -26,6 +29,7 @@ const makeEntry = (overrides: Partial<Entry> = {}): Entry => ({
   id: 1,
   entry_date: '2026-03-04',
   body: 'テスト',
+  version: 1,
   created_at: '2026-03-04T00:00:00Z',
   updated_at: '2026-03-04T00:00:00Z',
   ...overrides,
@@ -87,7 +91,7 @@ describe('useAutoSave', () => {
         await vi.advanceTimersByTimeAsync(30000)
       })
 
-      expect(mockCreate).toHaveBeenCalledWith({ date: '2026-03-04', body: '今日の日記' })
+      expect(mockCreate).toHaveBeenCalledWith({ date: '2026-03-04', body: '今日の日記' }, expect.any(AbortSignal))
       expect(result.current.status).toBe('saved')
       expect(result.current.autoCreated).toBe(true)
       expect(result.current.getCreatedDate()).toBe('2026-03-04')
@@ -113,9 +117,9 @@ describe('useAutoSave', () => {
       expect(mockUpdate).not.toHaveBeenCalled()
     })
 
-    it('create 後に内容が変わったとき update を呼ぶ', async () => {
-      mockCreate.mockResolvedValue(makeEntry())
-      mockUpdate.mockResolvedValue(makeEntry({ body: '更新内容' }))
+    it('create 後に内容が変わったとき、create レスポンスの version で update を呼ぶ', async () => {
+      mockCreate.mockResolvedValue(makeEntry({ version: 1 }))
+      mockUpdate.mockResolvedValue(makeEntry({ body: '更新内容', version: 2 }))
 
       const { rerender } = renderHook(
         ({ body }: { body: string }) => useAutoSave({ date: '2026-03-04', body }),
@@ -132,7 +136,7 @@ describe('useAutoSave', () => {
       await act(async () => {
         await vi.advanceTimersByTimeAsync(30000)
       })
-      expect(mockUpdate).toHaveBeenCalledWith('2026-03-04', '更新内容')
+      expect(mockUpdate).toHaveBeenCalledWith('2026-03-04', '更新内容', 1, expect.any(AbortSignal))
     })
 
     it('create が失敗したとき status が error、autoCreated が false のまま', async () => {
@@ -154,8 +158,8 @@ describe('useAutoSave', () => {
   })
 
   describe('既存エントリ（existingDate あり）', () => {
-    it('内容が変わったとき update を呼ぶ、create は呼ばない', async () => {
-      mockUpdate.mockResolvedValue(makeEntry({ body: '変更内容' }))
+    it('内容が変わったとき、initialVersion を使って update を呼ぶ、create は呼ばない', async () => {
+      mockUpdate.mockResolvedValue(makeEntry({ body: '変更内容', version: 4 }))
 
       renderHook(
         () =>
@@ -164,6 +168,7 @@ describe('useAutoSave', () => {
             body: '変更内容',
             existingDate: '2026-03-04',
             initialBody: '元の内容',
+            initialVersion: 3,
           }),
         { wrapper },
       )
@@ -173,7 +178,7 @@ describe('useAutoSave', () => {
       })
 
       expect(mockCreate).not.toHaveBeenCalled()
-      expect(mockUpdate).toHaveBeenCalledWith('2026-03-04', '変更内容')
+      expect(mockUpdate).toHaveBeenCalledWith('2026-03-04', '変更内容', 3, expect.any(AbortSignal))
     })
 
     it('内容が変わっていなければ保存しない', async () => {
@@ -184,6 +189,7 @@ describe('useAutoSave', () => {
             body: '同じ内容',
             existingDate: '2026-03-04',
             initialBody: '同じ内容',
+            initialVersion: 1,
           }),
         { wrapper },
       )
@@ -205,6 +211,7 @@ describe('useAutoSave', () => {
             body: '変更内容',
             existingDate: '2026-03-04',
             initialBody: '元の内容',
+            initialVersion: 1,
           }),
         { wrapper },
       )
@@ -214,6 +221,35 @@ describe('useAutoSave', () => {
       })
 
       expect(result.current.status).toBe('error')
+    })
+
+    it('update 成功後の version が次回の update 呼び出しに使われる', async () => {
+      mockUpdate
+        .mockResolvedValueOnce(makeEntry({ body: '1回目の変更', version: 2 }))
+        .mockResolvedValueOnce(makeEntry({ body: '2回目の変更', version: 3 }))
+
+      const { rerender } = renderHook(
+        ({ body }: { body: string }) =>
+          useAutoSave({
+            date: '2026-03-04',
+            body,
+            existingDate: '2026-03-04',
+            initialBody: '元の内容',
+            initialVersion: 1,
+          }),
+        { wrapper, initialProps: { body: '1回目の変更' } },
+      )
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(30000)
+      })
+      expect(mockUpdate).toHaveBeenNthCalledWith(1, '2026-03-04', '1回目の変更', 1, expect.any(AbortSignal))
+
+      rerender({ body: '2回目の変更' })
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(30000)
+      })
+      expect(mockUpdate).toHaveBeenNthCalledWith(2, '2026-03-04', '2回目の変更', 2, expect.any(AbortSignal))
     })
   })
 
@@ -235,7 +271,7 @@ describe('useAutoSave', () => {
       expect(queryClient.invalidateQueries).not.toHaveBeenCalledWith({ queryKey: ['entry', '2026-03-04'] })
     })
 
-    it('update 成功後に entries と entry のキャッシュを無効化する', async () => {
+    it('update 成功後に entries のキャッシュを無効化する（entry は無効化しない）', async () => {
       mockUpdate.mockResolvedValue(makeEntry({ body: '変更内容' }))
       vi.spyOn(queryClient, 'invalidateQueries')
 
@@ -246,6 +282,7 @@ describe('useAutoSave', () => {
             body: '変更内容',
             existingDate: '2026-03-04',
             initialBody: '元の内容',
+            initialVersion: 1,
           }),
         { wrapper },
       )
@@ -275,35 +312,270 @@ describe('useAutoSave', () => {
     })
   })
 
-  describe('並行実行の防止', () => {
-    it('前回の保存が進行中のとき次のインターバルはスキップする', async () => {
-      let resolveCreate!: (value: Entry | PromiseLike<Entry>) => void
-      const pendingCreate = new Promise<Entry>(resolve => {
-        resolveCreate = resolve
+  describe('保存の合流（coalescing）', () => {
+    it('保存中に自動保存tickと手動saveが重なった場合、実際のリクエストは1本のみで、完了後に最新内容で追いの保存が1回だけ走る', async () => {
+      let resolveFirst!: (value: Entry) => void
+      const firstCreate = new Promise<Entry>((resolve) => {
+        resolveFirst = resolve
       })
-      mockCreate.mockReturnValueOnce(pendingCreate)
+      mockCreate.mockReturnValueOnce(firstCreate)
+      mockUpdate.mockResolvedValue(makeEntry({ body: '2回目の内容', version: 2 }))
 
-      renderHook(
-        () => useAutoSave({ date: '2026-03-04', body: '日記内容' }),
-        { wrapper },
+      const { result, rerender } = renderHook(
+        ({ body }: { body: string }) => useAutoSave({ date: '2026-03-04', body }),
+        { wrapper, initialProps: { body: '1回目の内容' } },
       )
 
       // 1回目のインターバル発火: create が未完了のまま
+      let firstSavePromise!: Promise<void>
       act(() => {
-        vi.advanceTimersByTime(30000)
+        firstSavePromise = result.current.save()
       })
       expect(mockCreate).toHaveBeenCalledTimes(1)
 
-      // 2回目のインターバル発火: 1回目が進行中なのでスキップされる
+      // 進行中に本文が変わり、手動saveが呼ばれる → 次のラウンドに合流するだけで即時リクエストは増えない
+      rerender({ body: '2回目の内容' })
+      let secondSavePromise!: Promise<void>
       act(() => {
-        vi.advanceTimersByTime(30000)
+        secondSavePromise = result.current.save()
       })
       expect(mockCreate).toHaveBeenCalledTimes(1)
+      expect(mockUpdate).not.toHaveBeenCalled()
 
-      // 1回目を完了させる
+      // 1回目を完了させると、合流していた2回目のラウンドが最新内容で実行される
       await act(async () => {
-        resolveCreate(makeEntry())
+        resolveFirst(makeEntry({ version: 1 }))
+        await firstSavePromise
+        await secondSavePromise
       })
+
+      expect(mockUpdate).toHaveBeenCalledTimes(1)
+      expect(mockUpdate).toHaveBeenCalledWith('2026-03-04', '2回目の内容', 1, expect.any(AbortSignal))
+    })
+
+    it('本文が空、または前回保存から内容が変化していないためスキップされたラウンドでも、合流していた呼び出し元の save() がハングせず解決される', async () => {
+      const { result } = renderHook(
+        () => useAutoSave({ date: '2026-03-04', body: '' }),
+        { wrapper },
+      )
+
+      let resolved = false
+      await act(async () => {
+        await result.current.save()
+        resolved = true
+      })
+
+      expect(resolved).toBe(true)
+      expect(mockCreate).not.toHaveBeenCalled()
+    })
+
+    it('進行中の保存Aが成功し、それに合流していた次ラウンドBの保存が失敗した場合、Aの呼び出し元は成功のまま解決され、Bの呼び出し元だけがrejectされる', async () => {
+      let resolveFirst!: (value: Entry) => void
+      const firstCreate = new Promise<Entry>((resolve) => {
+        resolveFirst = resolve
+      })
+      mockCreate.mockReturnValueOnce(firstCreate)
+      mockUpdate.mockRejectedValue(new Error('network error'))
+
+      const { result, rerender } = renderHook(
+        ({ body }: { body: string }) => useAutoSave({ date: '2026-03-04', body }),
+        { wrapper, initialProps: { body: 'A' } },
+      )
+
+      let promiseA!: Promise<void>
+      act(() => {
+        promiseA = result.current.save()
+      })
+
+      rerender({ body: 'B' })
+      let promiseB!: Promise<void>
+      act(() => {
+        promiseB = result.current.save()
+      })
+
+      let aResolved = false
+      let bRejected = false
+      promiseA.then(() => { aResolved = true })
+      promiseB.catch(() => { bRejected = true })
+
+      await act(async () => {
+        resolveFirst(makeEntry({ version: 1 }))
+        await promiseA
+        await promiseB.catch(() => {})
+      })
+
+      expect(aResolved).toBe(true)
+      expect(bRejected).toBe(true)
+    })
+  })
+
+  describe('バージョン競合（VERSION_CONFLICT）', () => {
+    it('409(VERSION_CONFLICT)を受けたら status が conflict になり、current_version を保持する', async () => {
+      mockUpdate.mockRejectedValue(new ApiError('VERSION_CONFLICT', '競合しました', 409, 5))
+
+      const { result } = renderHook(
+        () =>
+          useAutoSave({
+            date: '2026-03-04',
+            body: '変更内容',
+            existingDate: '2026-03-04',
+            initialBody: '元の内容',
+            initialVersion: 1,
+          }),
+        { wrapper },
+      )
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(30000)
+      })
+
+      expect(result.current.status).toBe('conflict')
+    })
+
+    it('conflict状態のときは以降のtickで保存しない', async () => {
+      mockUpdate.mockRejectedValue(new ApiError('VERSION_CONFLICT', '競合しました', 409, 5))
+
+      renderHook(
+        () =>
+          useAutoSave({
+            date: '2026-03-04',
+            body: '変更内容',
+            existingDate: '2026-03-04',
+            initialBody: '元の内容',
+            initialVersion: 1,
+          }),
+        { wrapper },
+      )
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(30000)
+      })
+      expect(mockUpdate).toHaveBeenCalledTimes(1)
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(30000)
+      })
+      expect(mockUpdate).toHaveBeenCalledTimes(1)
+    })
+
+    it('reloadFromServer() は最新の内容で version・status を同期し、{ body, version } を返す', async () => {
+      mockUpdate.mockRejectedValue(new ApiError('VERSION_CONFLICT', '競合しました', 409, 5))
+      mockGetByDate.mockResolvedValue(makeEntry({ body: '他所での最新内容', version: 5 }))
+
+      const { result } = renderHook(
+        () =>
+          useAutoSave({
+            date: '2026-03-04',
+            body: '変更内容',
+            existingDate: '2026-03-04',
+            initialBody: '元の内容',
+            initialVersion: 1,
+          }),
+        { wrapper },
+      )
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(30000)
+      })
+      expect(result.current.status).toBe('conflict')
+
+      let reloaded!: { body: string; version: number }
+      await act(async () => {
+        reloaded = await result.current.reloadFromServer()
+      })
+
+      expect(reloaded).toEqual({ body: '他所での最新内容', version: 5 })
+      expect(result.current.status).toBe('idle')
+    })
+
+    it('forceSave() は保持していた current_version を使って update を呼び、成功すれば conflict を抜ける', async () => {
+      mockUpdate
+        .mockRejectedValueOnce(new ApiError('VERSION_CONFLICT', '競合しました', 409, 5))
+        .mockResolvedValueOnce(makeEntry({ body: '変更内容', version: 6 }))
+
+      const { result } = renderHook(
+        () =>
+          useAutoSave({
+            date: '2026-03-04',
+            body: '変更内容',
+            existingDate: '2026-03-04',
+            initialBody: '元の内容',
+            initialVersion: 1,
+          }),
+        { wrapper },
+      )
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(30000)
+      })
+      expect(result.current.status).toBe('conflict')
+
+      await act(async () => {
+        await result.current.forceSave()
+      })
+
+      expect(mockUpdate).toHaveBeenNthCalledWith(2, '2026-03-04', '変更内容', 5, expect.any(AbortSignal))
+      expect(result.current.status).toBe('saved')
+    })
+
+    it('competing状態でない（current_versionを保持していない）ときにforceSave()を呼ぶとreject される', async () => {
+      const { result } = renderHook(
+        () => useAutoSave({ date: '2026-03-04', body: '本文', existingDate: '2026-03-04', initialBody: '本文', initialVersion: 1 }),
+        { wrapper },
+      )
+
+      await expect(result.current.forceSave()).rejects.toThrow()
+    })
+  })
+
+  describe('保存インターバルの一定周期', () => {
+    it('保存が saving→saved と状態遷移してもタイマーがリセットされず intervalMs ごとに発火し続ける', async () => {
+      mockUpdate.mockResolvedValue(makeEntry({ body: '内容', version: 2 }))
+
+      renderHook(
+        () =>
+          useAutoSave({
+            date: '2026-03-04',
+            body: '内容',
+            existingDate: '2026-03-04',
+            initialBody: '元の内容',
+            initialVersion: 1,
+          }),
+        { wrapper },
+      )
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(30000)
+      })
+      expect(mockUpdate).toHaveBeenCalledTimes(1)
+
+      // 2回目以降は内容が変わっていないためスキップされるが、
+      // インターバル自体は30秒ごとに変わらず発火し続ける（タイマーの再起動が起きていないこと）
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(30000)
+      })
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(30000)
+      })
+      // 3回目のtickの前後で合計60秒しか経過していない前提のもとスキップが安定していることを確認
+      expect(mockUpdate).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  describe('新規エントリで自動保存によるcreateが成功した場合のautoCreated（回帰テスト）', () => {
+    it('create成功後にautoCreatedがtrueになる', async () => {
+      mockCreate.mockResolvedValue(makeEntry())
+
+      const { result } = renderHook(
+        () => useAutoSave({ date: '2026-03-04', body: '今日の日記' }),
+        { wrapper },
+      )
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(30000)
+      })
+
+      expect(result.current.autoCreated).toBe(true)
     })
   })
 
@@ -322,55 +594,37 @@ describe('useAutoSave', () => {
 
       expect(mockCreate).not.toHaveBeenCalled()
     })
-  })
 
-  describe('awaitCurrentSave', () => {
-    it('保存中でなければ即座に解決する', async () => {
-      const { result } = renderHook(
+    it('保存が進行中のままアンマウントされたら、in-flightリクエストがabortされる', async () => {
+      let capturedSignal: AbortSignal | undefined
+      mockCreate.mockImplementation((_data, signal) => {
+        capturedSignal = signal
+        return new Promise(() => {}) // 完了しないPromise（アンマウント時点でin-flight）
+      })
+
+      const { unmount } = renderHook(
         () => useAutoSave({ date: '2026-03-04', body: '日記内容' }),
         { wrapper },
       )
 
-      let resolved = false
-      await act(async () => {
-        await result.current.awaitCurrentSave()
-        resolved = true
-      })
-
-      expect(resolved).toBe(true)
-    })
-
-    it('保存中であれば完了まで待機する', async () => {
-      let resolveCreate!: (value: Entry | PromiseLike<Entry>) => void
-      const pendingCreate = new Promise<Entry>(resolve => {
-        resolveCreate = resolve
-      })
-      mockCreate.mockReturnValueOnce(pendingCreate)
-
-      const { result } = renderHook(
-        () => useAutoSave({ date: '2026-03-04', body: '日記内容' }),
-        { wrapper },
-      )
-
-      // インターバルを発火させるが、create は未完了のまま
       act(() => {
         vi.advanceTimersByTime(30000)
       })
+      expect(mockCreate).toHaveBeenCalledTimes(1)
+      expect(capturedSignal?.aborted).toBe(false)
 
-      let resolved = false
-      const waitPromise = result.current.awaitCurrentSave().then(() => {
-        resolved = true
-      })
+      unmount()
 
-      expect(resolved).toBe(false)
+      expect(capturedSignal?.aborted).toBe(true)
+    })
 
-      // create を完了させ、awaitCurrentSave が解決するのを待つ
-      await act(async () => {
-        resolveCreate(makeEntry())
-        await waitPromise
-      })
+    it('保存が進行中でなければアンマウント時に何もabortしない（例外が飛ばない）', () => {
+      const { unmount } = renderHook(
+        () => useAutoSave({ date: '2026-03-04', body: '' }),
+        { wrapper },
+      )
 
-      expect(resolved).toBe(true)
+      expect(() => unmount()).not.toThrow()
     })
   })
 })

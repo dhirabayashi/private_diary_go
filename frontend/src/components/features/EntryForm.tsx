@@ -17,10 +17,10 @@ const schema = z.object({
 
 type FormValues = z.infer<typeof schema>
 
-// 手動投稿時に競合を避けるために呼び出す口
 export interface EntryFormHandle {
   getCreatedDate: () => string | null
-  awaitCurrentSave: () => Promise<void>
+  save: () => Promise<void>
+  isAutoCreated: () => boolean
 }
 
 interface EntryFormProps {
@@ -29,6 +29,7 @@ interface EntryFormProps {
   submitLabel?: string
   dateReadOnly?: boolean
   autoSaveExistingDate?: string
+  autoSaveInitialVersion?: number
   onDateChange?: (date: string) => void
 }
 
@@ -40,6 +41,7 @@ export const EntryForm = forwardRef<EntryFormHandle, EntryFormProps>(
       submitLabel = '投稿する',
       dateReadOnly = false,
       autoSaveExistingDate,
+      autoSaveInitialVersion,
       onDateChange,
     },
     ref,
@@ -48,6 +50,7 @@ export const EntryForm = forwardRef<EntryFormHandle, EntryFormProps>(
       register,
       handleSubmit,
       watch,
+      setValue,
       formState: { errors, isSubmitting },
     } = useForm<FormValues>({
       resolver: zodResolver(schema),
@@ -57,18 +60,41 @@ export const EntryForm = forwardRef<EntryFormHandle, EntryFormProps>(
     const watchedDate = watch('date')
     const watchedBody = watch('body')
 
-    const { status: autoSaveStatus, autoCreated, getCreatedDate, awaitCurrentSave } = useAutoSave({
+    const {
+      status: autoSaveStatus,
+      autoCreated,
+      getCreatedDate,
+      save,
+      reloadFromServer,
+      forceSave,
+    } = useAutoSave({
       date: watchedDate ?? '',
       body: watchedBody ?? '',
       existingDate: autoSaveExistingDate,
       initialBody: defaultValues?.body,
+      initialVersion: autoSaveInitialVersion,
     })
 
-    useImperativeHandle(ref, () => ({ getCreatedDate, awaitCurrentSave }))
+    useImperativeHandle(ref, () => ({ getCreatedDate, save, isAutoCreated: () => autoCreated }))
 
     useEffect(() => {
       onDateChange?.(watchedDate)
     }, [watchedDate, onDateChange])
+
+    const handleReload = async () => {
+      const { body: latestBody } = await reloadFromServer()
+      // 読み込み直した内容を「初期値」として扱い、直後の自動保存の変化検知対象から外す
+      setValue('body', latestBody, { shouldDirty: false })
+    }
+
+    const handleForceSave = async () => {
+      if (!window.confirm('サーバー上の他の変更を上書きして保存します。よろしいですか？')) return
+      try {
+        await forceSave()
+      } catch {
+        // 再度409だった場合はstatusが'conflict'に戻り、バナーが表示され続ける
+      }
+    }
 
     return (
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
@@ -97,6 +123,20 @@ export const EntryForm = forwardRef<EntryFormHandle, EntryFormProps>(
           />
           <FieldError message={errors.body?.message} />
         </div>
+
+        {autoSaveStatus === 'conflict' && (
+          <div role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-800">
+            <p>他のタブ/端末での変更を検知しました。このまま保存すると上書きされる可能性があります。</p>
+            <div className="mt-2 flex gap-2">
+              <Button type="button" variant="secondary" size="sm" onClick={handleReload}>
+                最新の内容を読み込み直す
+              </Button>
+              <Button type="button" variant="ghost" size="sm" onClick={handleForceSave}>
+                このまま自分の内容で保存する
+              </Button>
+            </div>
+          </div>
+        )}
 
         <div className="flex items-center gap-4">
           <Button type="submit" loading={isSubmitting} size="lg">

@@ -43,6 +43,7 @@ const mockGetByDate = vi.mocked(entries.getByDate)
 const makeEntry = (overrides: Partial<Entry> = {}): Entry => ({
   id: 1,
   entry_date: '2026-03-19',
+  version: 1,
   body: 'テスト',
   created_at: '2026-03-19T00:00:00Z',
   updated_at: '2026-03-19T00:00:00Z',

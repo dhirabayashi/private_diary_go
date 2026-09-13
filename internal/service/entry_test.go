@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"private_diary/internal/model"
+	"private_diary/internal/repository"
 	"private_diary/internal/service"
 )
 
@@ -83,6 +84,16 @@ func TestEntryService_Create(t *testing.T) {
 		assert.False(t, saveCalled, "重複時はSaveを呼ばない")
 	})
 
+	t.Run("異常: ExistsDateチェック後のTOCTOUでSaveがErrConflictを返した場合もErrDuplicateDateになる", func(t *testing.T) {
+		repo := &mockEntryRepo{
+			existsDate: func(_ context.Context, date string) (bool, error) { return false, nil },
+			save:       func(_ context.Context, e *model.Entry) error { return repository.ErrConflict },
+		}
+		svc := service.NewEntryService(repo, noopImageRepo(), noopStorage())
+		_, err := svc.Create(ctx, "2024-03-15", "本文")
+		assert.ErrorIs(t, err, service.ErrDuplicateDate)
+	})
+
 	t.Run("異常: Repositoryエラーは伝播する", func(t *testing.T) {
 		repoErr := errors.New("db error")
 		repo := &mockEntryRepo{
@@ -99,19 +110,21 @@ func TestEntryService_Update(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("正常: 本文が更新される", func(t *testing.T) {
-		existing := &model.Entry{ID: 1, Date: "2024-03-15", Body: "旧本文"}
+		existing := &model.Entry{ID: 1, Date: "2024-03-15", Body: "旧本文", Version: 3}
 		var updatedEntry *model.Entry
 		repo := &mockEntryRepo{
 			findByDate: func(_ context.Context, date string) (*model.Entry, error) { return existing, nil },
-			update: func(_ context.Context, e *model.Entry) error {
+			update: func(_ context.Context, e *model.Entry, expectedVersion int) (bool, error) {
 				updatedEntry = e
-				return nil
+				assert.Equal(t, 3, expectedVersion)
+				return true, nil
 			},
 		}
 		svc := service.NewEntryService(repo, noopImageRepo(), noopStorage())
-		entry, err := svc.Update(ctx, "2024-03-15", "新本文")
+		entry, err := svc.Update(ctx, "2024-03-15", "新本文", 3)
 		require.NoError(t, err)
 		assert.Equal(t, "新本文", entry.Body)
+		assert.Equal(t, 4, entry.Version, "expectedVersion+1が返ること")
 		assert.Equal(t, "新本文", updatedEntry.Body)
 	})
 
@@ -120,8 +133,33 @@ func TestEntryService_Update(t *testing.T) {
 			findByDate: func(_ context.Context, date string) (*model.Entry, error) { return nil, nil },
 		}
 		svc := service.NewEntryService(repo, noopImageRepo(), noopStorage())
-		_, err := svc.Update(ctx, "2024-03-15", "本文")
+		_, err := svc.Update(ctx, "2024-03-15", "本文", 1)
 		assert.ErrorIs(t, err, service.ErrNotFound)
+	})
+
+	t.Run("異常: version不一致はVersionConflictErrorを返し現在versionを含む", func(t *testing.T) {
+		existing := &model.Entry{ID: 1, Date: "2024-03-15", Body: "旧本文", Version: 3}
+		current := &model.Entry{ID: 1, Date: "2024-03-15", Body: "他所での更新後", Version: 5}
+		calls := 0
+		repo := &mockEntryRepo{
+			findByDate: func(_ context.Context, date string) (*model.Entry, error) {
+				calls++
+				if calls == 1 {
+					return existing, nil
+				}
+				return current, nil
+			},
+			update: func(_ context.Context, e *model.Entry, expectedVersion int) (bool, error) {
+				return false, nil
+			},
+		}
+		svc := service.NewEntryService(repo, noopImageRepo(), noopStorage())
+		_, err := svc.Update(ctx, "2024-03-15", "新本文", 3)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, service.ErrVersionConflict)
+		var vce *service.VersionConflictError
+		require.ErrorAs(t, err, &vce)
+		assert.Equal(t, 5, vce.CurrentVersion)
 	})
 }
 

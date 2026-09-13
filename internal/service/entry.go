@@ -12,7 +12,7 @@ import (
 
 type EntryService interface {
 	Create(ctx context.Context, date, body string) (*model.Entry, error)
-	Update(ctx context.Context, date, body string) (*model.Entry, error)
+	Update(ctx context.Context, date, body string, expectedVersion int) (*model.Entry, error)
 	Delete(ctx context.Context, date string) error
 	GetByDate(ctx context.Context, date string) (*model.Entry, error)
 	List(ctx context.Context, params model.ListParams) ([]*model.Entry, int, error)
@@ -54,12 +54,15 @@ func (s *entryService) Create(ctx context.Context, date, body string) (*model.En
 	}
 
 	if err := s.repo.Save(ctx, entry); err != nil {
+		if errors.Is(err, repository.ErrConflict) {
+			return nil, ErrDuplicateDate
+		}
 		return nil, err
 	}
 	return entry, nil
 }
 
-func (s *entryService) Update(ctx context.Context, date, body string) (*model.Entry, error) {
+func (s *entryService) Update(ctx context.Context, date, body string, expectedVersion int) (*model.Entry, error) {
 	entry, err := s.repo.FindByDate(ctx, date)
 	if err != nil {
 		return nil, err
@@ -71,9 +74,22 @@ func (s *entryService) Update(ctx context.Context, date, body string) (*model.En
 	entry.Body = body
 	entry.UpdatedAt = time.Now()
 
-	if err := s.repo.Update(ctx, entry); err != nil {
+	ok, err := s.repo.Update(ctx, entry, expectedVersion)
+	if err != nil {
 		return nil, err
 	}
+	if !ok {
+		current, err := s.repo.FindByDate(ctx, date)
+		if err != nil {
+			return nil, err
+		}
+		currentVersion := expectedVersion
+		if current != nil {
+			currentVersion = current.Version
+		}
+		return nil, &VersionConflictError{CurrentVersion: currentVersion}
+	}
+	entry.Version = expectedVersion + 1
 	return entry, nil
 }
 

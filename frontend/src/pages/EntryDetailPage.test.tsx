@@ -52,6 +52,7 @@ vi.mock('../api/images', () => ({
 const makeEntry = (overrides: Partial<Entry> = {}): Entry => ({
   id: 1,
   entry_date: '2026-01-01',
+  version: 1,
   body: 'テスト本文',
   images: [],
   created_at: '2026-01-01T00:00:00Z',

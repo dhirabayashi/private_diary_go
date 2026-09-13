@@ -2,44 +2,33 @@ import { useRef, useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { PageLayout } from '../components/layout/PageLayout'
 import { EntryForm, type EntryFormHandle } from '../components/features/EntryForm'
-import { useEntry, useCreateEntry, useUpdateEntry } from '../hooks/useEntries'
+import { useEntry } from '../hooks/useEntries'
 import { useToast } from '../components/ui/Toast'
 import { today } from '../utils/date'
 
 export function NewEntryPage() {
   const navigate = useNavigate()
-  const { mutateAsync: createEntry } = useCreateEntry()
-  const { mutateAsync: updateEntry } = useUpdateEntry()
   const { showToast } = useToast()
   const formRef = useRef<EntryFormHandle>(null)
   const [selectedDate, setSelectedDate] = useState(today())
 
-  const { data: existingEntry } = useEntry(selectedDate)
+  // refetchOnWindowFocus: false — このクエリは「/newを開いた瞬間に既存投稿がないか確認する」
+  // 用途のみなので継続的な再フェッチは不要。自動保存が作成した自分自身のエントリをバックグラウンド
+  // 再フェッチで検知して誤って編集画面へ遷移することを防ぐ（下のisAutoCreated判定と合わせた多層防御）。
+  const { data: existingEntry } = useEntry(selectedDate, { refetchOnWindowFocus: false })
 
   useEffect(() => {
-    if (existingEntry) {
+    if (existingEntry && !formRef.current?.isAutoCreated()) {
       navigate(`/${existingEntry.entry_date}/edit`, { replace: true })
     }
   }, [existingEntry, navigate])
 
-  const handleSubmit = async (values: { date: string; body: string }) => {
+  const handleSubmit = async () => {
     try {
-      // 進行中の自動保存を待ってから判断することで、create の重複と state の非同期性による競合を防ぐ
-      await formRef.current?.awaitCurrentSave()
-      const autoSavedDate = formRef.current?.getCreatedDate() ?? null
-
-      if (autoSavedDate === values.date) {
-        // 自動保存でエントリ作成済みなので update する
-        await updateEntry({ date: autoSavedDate, body: values.body })
-        showToast('日記を投稿しました')
-        navigate(`/${autoSavedDate}`)
-      } else {
-        // autoCreated === true のとき EntryForm が日付を readOnly にするため、
-        // autoSavedDate !== values.date のケースは自動保存前の手動投稿のみ。
-        const entry = await createEntry(values)
-        showToast('日記を投稿しました')
-        navigate(`/${entry.entry_date}`)
-      }
+      await formRef.current?.save()
+      const savedDate = formRef.current?.getCreatedDate()
+      showToast('日記を投稿しました')
+      navigate(`/${savedDate}`)
     } catch (e) {
       const msg = e instanceof Error ? e.message : '投稿に失敗しました'
       showToast(msg, 'error')

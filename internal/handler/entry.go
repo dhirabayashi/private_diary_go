@@ -121,20 +121,31 @@ func (h *EntryHandler) GetByDate(w http.ResponseWriter, r *http.Request) {
 func (h *EntryHandler) Update(w http.ResponseWriter, r *http.Request) {
 	date := chi.URLParam(r, "date")
 	var req struct {
-		Body string `json:"body"`
+		Body    string `json:"body"`
+		Version int    `json:"version"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		respondError(w, http.StatusBadRequest, "INVALID_REQUEST", err.Error())
 		return
 	}
 
-	entry, err := h.entryService.Update(r.Context(), date, req.Body)
+	entry, err := h.entryService.Update(r.Context(), date, req.Body, req.Version)
 	if err != nil {
-		if errors.Is(err, service.ErrNotFound) {
+		var vce *service.VersionConflictError
+		switch {
+		case errors.Is(err, service.ErrNotFound):
 			respondError(w, http.StatusNotFound, "NOT_FOUND", err.Error())
-			return
+		case errors.As(err, &vce):
+			respondJSON(w, http.StatusConflict, map[string]interface{}{
+				"error": map[string]interface{}{
+					"code":            "VERSION_CONFLICT",
+					"message":         vce.Error(),
+					"current_version": vce.CurrentVersion,
+				},
+			})
+		default:
+			respondError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
 		}
-		respondError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
 		return
 	}
 

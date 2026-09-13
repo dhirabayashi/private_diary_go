@@ -73,14 +73,15 @@ func TestImportService_Import(t *testing.T) {
 	})
 
 	t.Run("既存エントリあり・overwrite=true → Updateが呼ばれる", func(t *testing.T) {
-		existing := &model.Entry{ID: 1, Date: "2024-03-15", Body: "旧本文"}
+		existing := &model.Entry{ID: 1, Date: "2024-03-15", Body: "旧本文", Version: 1}
 		updateCalled := false
 		repo := &mockEntryRepo{
 			existsDate: func(_ context.Context, date string) (bool, error) { return true, nil },
 			findByDate: func(_ context.Context, date string) (*model.Entry, error) { return existing, nil },
-			update: func(_ context.Context, e *model.Entry) error {
+			update: func(_ context.Context, e *model.Entry, expectedVersion int) (bool, error) {
 				updateCalled = true
-				return nil
+				assert.Equal(t, 1, expectedVersion)
+				return true, nil
 			},
 		}
 		svc := service.NewImportService(repo)
@@ -89,6 +90,7 @@ func TestImportService_Import(t *testing.T) {
 		assert.False(t, needsConfirm)
 		assert.True(t, updateCalled)
 		assert.Equal(t, "新本文", entry.Body)
+		assert.Equal(t, 2, entry.Version)
 	})
 }
 

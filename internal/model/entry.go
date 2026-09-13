@@ -6,6 +6,7 @@ type Entry struct {
 	ID        int64     `json:"id"`
 	Date      string    `json:"entry_date"`
 	Body      string    `json:"body"`
+	Version   int       `json:"version"`
 	Preview   string    `json:"preview,omitempty"`
 	Images    []*Image  `json:"images,omitempty"`
 	CreatedAt time.Time `json:"created_at"`

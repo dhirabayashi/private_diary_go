@@ -11,6 +11,7 @@ export interface Entry {
   id: number
   entry_date: string
   body: string
+  version: number
   preview?: string
   images?: Image[]
   created_at: string

@@ -116,6 +116,78 @@ func TestEntryHandler_Create_DuplicateDate(t *testing.T) {
 	assert.Equal(t, http.StatusConflict, rec.Code)
 }
 
+func TestEntryHandler_Update_Success(t *testing.T) {
+	esSvc := &mockEntryService{
+		update: func(_ context.Context, date, body string, expectedVersion int) (*model.Entry, error) {
+			assert.Equal(t, 3, expectedVersion)
+			e := makeEntry(date, body)
+			e.Version = expectedVersion + 1
+			return e, nil
+		},
+	}
+	h := handler.NewEntryHandler(esSvc, noImages())
+
+	body, _ := json.Marshal(map[string]interface{}{"body": "更新後の本文", "version": 3})
+	r := chi.NewRouter()
+	r.Put("/{date}", h.Update)
+
+	req := httptest.NewRequest(http.MethodPut, "/2024-03-15", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	var resp map[string]interface{}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	data := resp["data"].(map[string]interface{})
+	assert.EqualValues(t, 4, data["version"])
+}
+
+func TestEntryHandler_Update_VersionConflict(t *testing.T) {
+	esSvc := &mockEntryService{
+		update: func(_ context.Context, date, body string, expectedVersion int) (*model.Entry, error) {
+			return nil, &service.VersionConflictError{CurrentVersion: 5}
+		},
+	}
+	h := handler.NewEntryHandler(esSvc, noImages())
+
+	body, _ := json.Marshal(map[string]interface{}{"body": "本文", "version": 3})
+	r := chi.NewRouter()
+	r.Put("/{date}", h.Update)
+
+	req := httptest.NewRequest(http.MethodPut, "/2024-03-15", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusConflict, rec.Code)
+	var resp map[string]interface{}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	errObj := resp["error"].(map[string]interface{})
+	assert.Equal(t, "VERSION_CONFLICT", errObj["code"])
+	assert.EqualValues(t, 5, errObj["current_version"])
+}
+
+func TestEntryHandler_Update_NotFound(t *testing.T) {
+	esSvc := &mockEntryService{
+		update: func(_ context.Context, date, body string, expectedVersion int) (*model.Entry, error) {
+			return nil, service.ErrNotFound
+		},
+	}
+	h := handler.NewEntryHandler(esSvc, noImages())
+
+	body, _ := json.Marshal(map[string]interface{}{"body": "本文", "version": 1})
+	r := chi.NewRouter()
+	r.Put("/{date}", h.Update)
+
+	req := httptest.NewRequest(http.MethodPut, "/2024-01-01", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+}
+
 func TestEntryHandler_GetByDate(t *testing.T) {
 	esSvc := &mockEntryService{
 		getByDate: func(_ context.Context, date string) (*model.Entry, error) {

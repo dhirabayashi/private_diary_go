@@ -6,6 +6,8 @@ import (
 	"errors"
 	"time"
 
+	sqlitedriver "modernc.org/sqlite"
+
 	"private_diary/internal/model"
 	"private_diary/internal/repository"
 )
@@ -20,7 +22,7 @@ func NewEntryRepository(db *sql.DB) repository.EntryRepository {
 
 func (r *entryRepository) FindByDate(ctx context.Context, date string) (*model.Entry, error) {
 	row := r.db.QueryRowContext(ctx,
-		`SELECT id, entry_date, body, created_at, updated_at FROM entries WHERE entry_date = ?`, date)
+		`SELECT id, entry_date, body, version, created_at, updated_at FROM entries WHERE entry_date = ?`, date)
 	return scanEntry(row)
 }
 
@@ -33,7 +35,7 @@ func (r *entryRepository) List(ctx context.Context, params model.ListParams) ([]
 	}
 
 	offset := (params.Page - 1) * params.PageSize
-	query := `SELECT id, entry_date, body, created_at, updated_at FROM entries` +
+	query := `SELECT id, entry_date, body, version, created_at, updated_at FROM entries` +
 		where + ` ORDER BY entry_date DESC LIMIT ? OFFSET ?`
 	rows, err := r.db.QueryContext(ctx, query, append(args, params.PageSize, offset)...)
 	if err != nil {
@@ -54,12 +56,15 @@ func (r *entryRepository) List(ctx context.Context, params model.ListParams) ([]
 
 func (r *entryRepository) Save(ctx context.Context, entry *model.Entry) error {
 	result, err := r.db.ExecContext(ctx,
-		`INSERT INTO entries (entry_date, body, created_at, updated_at) VALUES (?, ?, ?, ?)`,
+		`INSERT INTO entries (entry_date, body, version, created_at, updated_at) VALUES (?, ?, 1, ?, ?)`,
 		entry.Date, entry.Body,
 		entry.CreatedAt.Format(time.RFC3339),
 		entry.UpdatedAt.Format(time.RFC3339),
 	)
 	if err != nil {
+		if isUniqueConstraintErr(err) {
+			return repository.ErrConflict
+		}
 		return err
 	}
 	id, err := result.LastInsertId()
@@ -67,15 +72,32 @@ func (r *entryRepository) Save(ctx context.Context, entry *model.Entry) error {
 		return err
 	}
 	entry.ID = id
+	entry.Version = 1
 	return nil
 }
 
-func (r *entryRepository) Update(ctx context.Context, entry *model.Entry) error {
-	_, err := r.db.ExecContext(ctx,
-		`UPDATE entries SET body = ?, updated_at = ? WHERE entry_date = ?`,
-		entry.Body, entry.UpdatedAt.Format(time.RFC3339), entry.Date,
+func (r *entryRepository) Update(ctx context.Context, entry *model.Entry, expectedVersion int) (bool, error) {
+	result, err := r.db.ExecContext(ctx,
+		`UPDATE entries SET body = ?, updated_at = ?, version = version + 1
+		 WHERE entry_date = ? AND version = ?`,
+		entry.Body, entry.UpdatedAt.Format(time.RFC3339), entry.Date, expectedVersion,
 	)
-	return err
+	if err != nil {
+		return false, err
+	}
+	n, err := result.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+	return n > 0, nil
+}
+
+// isUniqueConstraintErr はerrがSQLiteのUNIQUE制約違反によるものかどうかを判定する
+// （プライマリの結果コード SQLITE_CONSTRAINT = 19。拡張コードが返っていても下位バイトに
+// プライマリコードが残るため、下位バイトのみで判定する）。
+func isUniqueConstraintErr(err error) bool {
+	var sqliteErr *sqlitedriver.Error
+	return errors.As(err, &sqliteErr) && sqliteErr.Code()&0xff == 19
 }
 
 func (r *entryRepository) Delete(ctx context.Context, date string) error {
@@ -92,7 +114,7 @@ func (r *entryRepository) ExistsDate(ctx context.Context, date string) (bool, er
 func (r *entryRepository) ListForExport(ctx context.Context, from, to string) ([]*model.Entry, error) {
 	where, args := buildWhere("", from, to)
 	rows, err := r.db.QueryContext(ctx,
-		`SELECT id, entry_date, body, created_at, updated_at FROM entries`+where+` ORDER BY entry_date DESC`,
+		`SELECT id, entry_date, body, version, created_at, updated_at FROM entries`+where+` ORDER BY entry_date DESC`,
 		args...)
 	if err != nil {
 		return nil, err
@@ -136,7 +158,7 @@ type rowScanner interface {
 func scanEntry(row *sql.Row) (*model.Entry, error) {
 	var e model.Entry
 	var createdAt, updatedAt string
-	err := row.Scan(&e.ID, &e.Date, &e.Body, &createdAt, &updatedAt)
+	err := row.Scan(&e.ID, &e.Date, &e.Body, &e.Version, &createdAt, &updatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
@@ -156,7 +178,7 @@ func scanEntryRow(rows *sql.Rows) (*model.Entry, error) {
 	var e model.Entry
 	var createdAt, updatedAt string
 	var err error
-	if err = rows.Scan(&e.ID, &e.Date, &e.Body, &createdAt, &updatedAt); err != nil {
+	if err = rows.Scan(&e.ID, &e.Date, &e.Body, &e.Version, &createdAt, &updatedAt); err != nil {
 		return nil, err
 	}
 	if e.CreatedAt, err = time.Parse(time.RFC3339, createdAt); err != nil {

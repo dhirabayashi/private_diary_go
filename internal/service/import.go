@@ -67,11 +67,17 @@ func (s *importService) Import(ctx context.Context, filename string, r io.Reader
 		if err != nil {
 			return nil, false, err
 		}
+		expectedVersion := entry.Version
 		entry.Body = body
 		entry.UpdatedAt = now
-		if err := s.repo.Update(ctx, entry); err != nil {
+		ok, err := s.repo.Update(ctx, entry, expectedVersion)
+		if err != nil {
 			return nil, false, err
 		}
+		if !ok {
+			return nil, false, ErrVersionConflict
+		}
+		entry.Version = expectedVersion + 1
 		return entry, false, nil
 	}
 

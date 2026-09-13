@@ -12,7 +12,7 @@ import (
 
 type mockEntryService struct {
 	create    func(ctx context.Context, date, body string) (*model.Entry, error)
-	update    func(ctx context.Context, date, body string) (*model.Entry, error)
+	update    func(ctx context.Context, date, body string, expectedVersion int) (*model.Entry, error)
 	delete    func(ctx context.Context, date string) error
 	getByDate func(ctx context.Context, date string) (*model.Entry, error)
 	list      func(ctx context.Context, params model.ListParams) ([]*model.Entry, int, error)
@@ -21,8 +21,8 @@ type mockEntryService struct {
 func (m *mockEntryService) Create(ctx context.Context, date, body string) (*model.Entry, error) {
 	return m.create(ctx, date, body)
 }
-func (m *mockEntryService) Update(ctx context.Context, date, body string) (*model.Entry, error) {
-	return m.update(ctx, date, body)
+func (m *mockEntryService) Update(ctx context.Context, date, body string, expectedVersion int) (*model.Entry, error) {
+	return m.update(ctx, date, body, expectedVersion)
 }
 func (m *mockEntryService) Delete(ctx context.Context, date string) error {
 	return m.delete(ctx, date)
